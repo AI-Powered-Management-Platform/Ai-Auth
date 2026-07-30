@@ -14,6 +14,8 @@ multi-tenant session control, and risk scoring on every login.
 ⚠️ Security-first rule: never weaken auth for convenience. The passkey
 fast-path is the UX answer, not a lowered bar.
 
+Security hardening backlog: [SECURITY.md](SECURITY.md)
+
 ---
 
 ## Architecture
@@ -31,81 +33,107 @@ fast-path is the UX answer, not a lowered bar.
 ## Features A–Z
 
 ### A — Account linking
+
 Bind multiple identities to one account. Enforce required-provider sets.
 
 ### B — Brute-force protection
+
 Per-IP, per-account, and per-tenant throttles. Credential-stuffing detection.
 
 ### C — Consent and scopes
+
 Explicit scope grants, consent screen, revocable per client.
 
 ### D — Device trust
+
 Device registration, trusted-device list, per-device revoke.
 
 ### E — Email OTP and magic links
+
 Single-use, short-TTL, bound to originating browser.
 
 ### F — Federation
+
 Upstream OIDC and SAML. Facebook, Google, Apple, Microsoft connectors.
 
 ### G — Granular authorization
+
 Roles, permissions, and attribute-based policy evaluation.
 
 ### H — Hashing
+
 Argon2id with tuned parameters. Transparent rehash on login.
 
 ### I — Identity lifecycle
+
 Invite, activate, suspend, deactivate, delete with retention rules.
 
 ### J — JWT and PASETO issuance
+
 Short-lived access tokens, asymmetric signing, published JWKS.
 
 ### K — Key management
+
 KMS envelope encryption for secrets. Scheduled signing-key rotation.
 
 ### L — Login risk scoring
+
 Impossible travel, new device, velocity, and reputation signals.
 
 ### M — Multi-factor authentication
+
 TOTP, WebAuthn second factor, single-use recovery codes.
 
 ### N — Notification of attempts
+
 Alert the account owner on failed and unusual login attempts.
 
 ### O — OAuth 2.1 / OIDC provider
+
 Authorization code with mandatory PKCE. Client credentials. Discovery document.
 
 ### P — Passkeys
+
 Platform and roaming WebAuthn credentials. Full attestation verification.
 
 ### Q — Quotas and rate limits
+
 Per-tenant request budgets on every auth endpoint.
 
 ### R — Refresh token rotation
+
 One-time-use refresh tokens with reuse detection and family revoke.
 
 ### S — Session management
+
 List active sessions, revoke one or all, absolute and idle timeouts.
 
 ### T — Tenant isolation
+
 Row-level security per organization. No shared session namespace.
 
 ### U — User self-service
+
 Profile, credential management, account recovery without support tickets.
 
 ### V — Verification
+
 Email and phone verification. Hooks for KYC providers.
 
 ### W — Webhook events
+
 `login`, `logout`, `lockout`, `mfa_enrolled`, `grant`, `revoke`. HMAC-signed.
 
 ### X — XSS, CSRF, and clickjacking defense
+
 Nonce-based CSP, `X-Frame-Options: DENY`, double-submit CSRF, `SameSite` cookies.
 
 ### Y — Yubikey and hardware tokens
+
 FIDO2 security keys as primary or step-up factor.
 
 ### Z — Zero-trust policy engine
+
 Every request re-evaluated. No implicit trust from network position.
 
 ---
