@@ -6,6 +6,8 @@ is a feature to build, not advice.
 Priority: **P0** ship before first real user · **P1** before paid tenants ·
 **P2** roadmap.
 
+Attack mechanics behind these controls: [docs/threat-model.md](docs/threat-model.md).
+
 ---
 
 ## 1. The gap passkeys do not close

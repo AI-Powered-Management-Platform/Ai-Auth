@@ -14,7 +14,12 @@ multi-tenant session control, and risk scoring on every login.
 ⚠️ Security-first rule: never weaken auth for convenience. The passkey
 fast-path is the UX answer, not a lowered bar.
 
-Security hardening backlog: [SECURITY.md](SECURITY.md)
+| Document | Contents |
+| --- | --- |
+| [SECURITY.md](SECURITY.md) | Hardening backlog, prioritised |
+| [docs/threat-model.md](docs/threat-model.md) | T1–T8 attacks and controls |
+
+⚠️ Read T1 first. Passkeys do not stop session theft after login.
 
 ---
 
@@ -44,9 +49,9 @@ Per-IP, per-account, and per-tenant throttles. Credential-stuffing detection.
 
 Explicit scope grants, consent screen, revocable per client.
 
-### D — Device trust
+### D — Device-bound sessions
 
-Device registration, trusted-device list, per-device revoke.
+DBSC cookie binding to TPM, trusted-device list, per-device revoke.
 
 ### E — Email OTP and magic links
 
@@ -70,7 +75,8 @@ Invite, activate, suspend, deactivate, delete with retention rules.
 
 ### J — JWT and PASETO issuance
 
-Short-lived access tokens, asymmetric signing, published JWKS.
+Short-lived access tokens, asymmetric signing, published JWKS. DPoP
+sender-constrained by default, so a stolen token is unusable.
 
 ### K — Key management
 
@@ -82,7 +88,8 @@ Impossible travel, new device, velocity, and reputation signals.
 
 ### M — Multi-factor authentication
 
-TOTP, WebAuthn second factor, single-use recovery codes.
+TOTP, WebAuthn second factor, single-use recovery codes. Fallback strength must
+equal primary strength — see T2 in the threat model.
 
 ### N — Notification of attempts
 
@@ -106,7 +113,8 @@ One-time-use refresh tokens with reuse detection and family revoke.
 
 ### S — Session management
 
-List active sessions, revoke one or all, absolute and idle timeouts.
+List active sessions, revoke one or all, absolute and idle timeouts. Continuous
+evaluation via CAEP, so revocation is pushed, not awaited.
 
 ### T — Tenant isolation
 
