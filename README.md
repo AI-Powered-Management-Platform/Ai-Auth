@@ -2,6 +2,8 @@
 
 AI-assisted identity provider. Passkey-first authentication, OIDC provider,
 multi-tenant session control, and risk scoring on every login.
+This is independence service package base on, API bases, container, communication base on certificate.
+Infrastructure security: CF tunnel, Google PAM, Google Confidential computing 
 
 | Item | Value |
 | --- | --- |
