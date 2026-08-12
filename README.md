@@ -9,7 +9,7 @@ Tigh-performance, tri-language identity provider into a production-grade, global
  🛡️ 1. Cryptography & Hardware Isolation (Rust Core)
 Because your system handles the highest level of security, you must dive deep into how cryptography behaves inside bare-metal memory.Google Confidential Space / Intel SGX / AMD SEV: Study how to package your Rust binary into a Confidential VM, ensuring memory pages are hardware-encrypted by the CPU so root cloud administrators cannot read running data.WebAuthn Passkey Cryptography: Deeply learn the processing of Attestation and Assertion data streams from Apple/Google devices. You must safely store public keys (COSE format) and verify signatures (Ed25519 or ES256) at assembly speeds.Cryptographic Key Lifecycle Management: Architect how the master Key Encryption Key (KEK) is pulled from Google Cloud KMS or HashiCorp Vault to wrap and unwrap individual row Data Encryption Keys (DEKs).
 🚀 2. Ultra-High Performance & Transport Security (Go Core)
-Go owns your network edge. You must configure it to withstand intense adversarial traffic without breaking.Mutual TLS (mTLS) Mesh Network: Design an automated internal Certificate Authority (CA) pattern (like using cert-manager or HashiCorp Vault) to rotate short-lived SSL/TLS certificates for Go-Rust-Python internal gRPC communication.Zero-Allocation Network Primitives: Study how Go's sync.Pool avoids object allocation garbage collection overhead during millions of incoming login routing cycles.OIDC/OAuth2 PKCE Validation Engine: Master the exact verification mechanics of cryptographic code_challenge state tracking to eliminate mobile session hijacking vulnerabilities entirely.
+Go owns your network edge. You must configure it to withstand intense adversarial traffic without breaking.Mutual TLS (mTLS) Mesh Network: Design an automated internal Certificate Authority (CA) pattern (like using cert-manager or HashiCorp Vault) to rotate short-lived SSL/TLS certificates for Go-Rust-Python internal gRPC communication.Zero-Allocation Network Primitives: Study how Go's sync.Pool avoids object allocation garbage collection overhead during millions of incoming login routing cycles.OIDC/OAuth2 PKCE Validation Engine: Master the exact verification mechanics of cryptographic code_challenge state tracking to eliminate authorization-code interception on mobile. ⚠️ PKCE closes code interception only — it does not stop an adversary-in-the-middle proxy, which relays the whole flow and takes the issued session at the end. See T1 Path A.
 
 🧠 3. Invisible Threat Detection & Isolation (Python Worker)
 Your AI must operate with maximum defense-in-depth, treating Python packages as potentially vulnerable.ONNX Engine & C-Extension Optimization: Research how to export models from Python into .onnx formats to entirely bypass the Python Global Interpreter Lock (GIL) and cut container image sizes down.Real-time Behavioral Velocity Graphing: Figure out how to securely stream time-series metadata (login speeds, impossible physical travel times, device fingerprint mutations) from Go to Python within a strict 50ms processing window.Secure Python Dependency Isolation: Implement strict supply-chain checking (pip-audit, container scanning) to safeguard the Python container against third-party machine learning package vulnerabilities.
@@ -38,7 +38,9 @@ Mobile users rarely log out. Sessions can last for months, making an active mobi
 
 | Item | Value |
 | --- | --- |
-| Identity core | Go |
+| Edge gateway | Go |
+| Crypto core | Rust |
+| Risk worker | Python |
 | Control plane | Python / FastAPI |
 | Console | Next.js |
 | Store | Postgres + Redis |
@@ -58,13 +60,232 @@ fast-path is the UX answer, not a lowered bar.
 
 ## Architecture
 
+Three services, three languages, one public door.
+
+```text
+                      [ Mobile / Web Client ]
+                               │
+                               ▼  Cloudflare Tunnel — the only public entry
+ ┌─────────────────────────────────────────────────────────────┐
+ │                GO EDGE API GATEWAY (Master)                 │
+ │   Multi-tenant boundary · OIDC routing · owns all state     │
+ └─────────────┬───────────────────────────────┬───────────────┘
+               │  gRPC over mTLS               │  gRPC over mTLS
+               ▼  net-a                        ▼  net-b
+ ┌──────────────────────────────┐┌──────────────────────────────┐
+ │ RUST CRYPTO SERVICE (Guard)  ││ PYTHON AI WORKER (Thinker)   │
+ │  Passkey validation          ││  Real-time risk scoring      │
+ │  Envelope row encryption     ││  Anomaly matrix tracking     │
+ └──────────────────────────────┘└──────────────────────────────┘
+          these two have no route to each other
+```
+
+### Data plane — on the login path
+
 | Service | Language | Job |
 | --- | --- | --- |
-| `core` | Go | Tokens, sessions, WebAuthn |
-| `oidc` | Go | OAuth 2.1 / OIDC endpoints |
+| `gateway` | Go | Public transport, tenant boundary, OIDC, tokens, sessions |
+| `crypto` | Rust | Passkey verification, envelope encryption, blind indexing |
+| `ai` | Python | Risk scoring, anomaly tracking — advisory only |
+
+### Control plane — off the login path
+
+| Service | Language | Job |
+| --- | --- | --- |
 | `api` | Python | Tenants, policy, admin |
-| `worker` | Python | Webhooks, risk jobs, audit |
+| `worker` | Python | Webhooks, audit export, batch jobs |
 | `console` | TypeScript | Admin and self-service UI |
+
+---
+
+## Security model
+
+### Why three languages
+
+Each language sits where its own failure mode costs the least.
+
+| Service | Holds keys | Holds state | Public | If compromised, the attacker gets |
+| --- | --- | --- | --- | --- |
+| `gateway` | ❌ | ✅ | ✅ | Ciphertext it cannot read, plus an RPC surface |
+| `crypto` | ✅ | ❌ | ❌ | Everything — but the smallest, most-reviewed code |
+| `ai` | ❌ | ⚠️ behavioural | ❌ | A score generator with no authority |
+
+Python carries the largest dependency tree, so it is the **most likely** service
+to be compromised — and it is given the **least** power. Rust is the least
+likely and holds the most. Likelihood and blast radius run in opposite
+directions; that is the point of the split.
+
+| Language | Chosen for the one thing it alone provides |
+| --- | --- |
+| Rust | Deterministic key erasure. No garbage collector can copy a secret and leave the original behind. |
+| Go | Deadline propagation via `context`, cheap concurrency, mature OIDC and TLS libraries. |
+| Python | The ML ecosystem — and nothing else. |
+
+⚠️ The vault sits **furthest** from the internet, not closest. If Rust faced the
+public edge, every HTTP parsing bug would be a bug in the process holding the
+KEK. The Guard only ever sees input the Gateway has already validated.
+
+### Request order — cheapest check first
+
+Each stage costs more than the last and runs only if the cheaper one passed.
+
+| # | Stage | Budget | On failure |
+| --- | --- | --- | --- |
+| 1 | Go — rate limit, tenant resolve, input shape | ~1 ms | Reject |
+| 2 | Rust — verify the cryptographic proof | ~15 ms | ❌ Reject, stop here |
+| 3 | Python — score the risk | ~50 ms | ⚠️ Continue at band `HIGH` |
+| 4 | Go — combine verdict, score, tenant policy | ~20 ms | — |
+
+⚠️ Step 3 never runs for an attempt that failed step 2. **Authenticate before
+you compute.** Scoring in parallel would save ~15 ms on a real login and hand an
+attacker a free way to exhaust the most expensive service in the system with
+forged signatures.
+
+### Fail-closed matrix
+
+Degradation is always toward strictness.
+
+| Failure | Behaviour |
+| --- | --- |
+| Guard unreachable or slow | ❌ Reject all authentication. No fallback path exists. |
+| Thinker unreachable or slow | ⚠️ Apply band `HIGH`. Step-up required, not denied. |
+| KMS or Vault unreachable | ❌ Guard refuses to unwrap. Encrypted reads fail. |
+
+The asymmetry is deliberate. No Guard means we cannot prove identity, so nobody
+gets in. No Thinker means we cannot rate risk, so everybody is treated as risky.
+Neither degrades toward open.
+
+### What each layer actually protects
+
+Rust owns exactly one row of this table. The rest is configuration and
+discipline, and no language choice performs them for you.
+
+| Layer | Covered by |
+| --- | --- |
+| Memory safety, key erasure | 🦀 Rust — `#![forbid(unsafe_code)]`, `zeroize` on drop |
+| CPU and cache side channels | Confidential VM, constant-time crates (`subtle`) |
+| Disk | No swap, `mlock` on key pages, read-only rootfs, `tmpfs` for temp |
+| Dependencies | `cargo-deny`, `pip-audit`, small dependency counts, pinned lockfiles |
+| Traffic | mTLS, per-pair networks, rate limits |
+| Infrastructure | Non-root, dropped capabilities, no shell in the image |
+
+⚠️ "We used Rust" is the same error as "we have passkeys." Each closes one layer
+completely and nothing else. Rust does not protect the CPU, disk, cache,
+dependencies, traffic, or infrastructure.
+
+⚠️ Two Rust traps worth fixing early: integer overflow **wraps silently** in
+release builds — set `overflow-checks = true` for the crypto crate; and
+`build.rs` executes arbitrary code at compile time, so a poisoned crate runs on
+CI before any binary ships.
+
+---
+
+## Deployment
+
+### Containers
+
+One container per service, hardened by trust level. A container is not a
+security boundary by default — the isolation comes from this configuration.
+
+| | `gateway` (Go) | `crypto` (Rust) | `ai` (Python) |
+| --- | --- | --- | --- |
+| Base image | distroless | scratch | distroless-python |
+| Shell present | ❌ None | ❌ None | ❌ None |
+| Runs as root | ❌ No | ❌ No | ❌ No |
+| Filesystem | Read-only | Read-only | Read-only |
+| Linux capabilities | Drop all | Drop all | Drop all |
+| Public ingress | ✅ The only one | ❌ Never | ❌ Never |
+| Internet egress | Tunnel only | KMS only | ❌ None |
+
+Exporting models to ONNX takes the Python image from roughly 2 GB to 200 MB.
+That is not only a speed decision — it removes most of the packages that would
+otherwise need auditing.
+
+### Networks
+
+Three networks, not one. The Guard and the Thinker cannot reach each other —
+there is no path, so a compromised ML dependency cannot send a packet toward the
+keys.
+
+| Network | Members |
+| --- | --- |
+| `edge` | Tunnel + `gateway` |
+| `net-a` | `gateway` + `crypto` |
+| `net-b` | `gateway` + `ai` |
+
+Guard and Thinker are `expose`d, never `ports`-published. Certificates are
+mounted at runtime, never baked into an image.
+
+### Transport
+
+| Property | Value |
+| --- | --- |
+| Protocol | gRPC over mutual TLS |
+| Certificate lifetime | 24 h, rotated automatically from an internal CA |
+| Peer check | Certificate validity **and** an identity allowlist |
+| Plaintext gRPC | Not a supported mode, including local development |
+
+A valid certificate is not authorisation. `gateway` may call both services;
+neither of them may call anything.
+
+⚠️ If development runs without mTLS, development and production behave
+differently, and the development path eventually ships.
+
+### Repository
+
+Single repository. The `.proto` contract is shared by all three services, so a
+contract change and its three implementations must land in one commit that CI
+verifies together. Separate repositories would make that a four-PR dance with no
+way to check the services still agree.
+
+```text
+proto/      the wire contract, source of truth
+gateway/    Go
+crypto/     Rust
+ai/         Python
+deploy/     compose files, network configuration
+docs/
+```
+
+CI enforces two invariants:
+
+| Check | Prevents |
+| --- | --- |
+| `buf breaking` | Silent wire-format breaks between services |
+| Schema guard on `RiskAssessment` | Any `allow` / `deny` / `decision` field being added |
+
+The second turns "the risk model must never authorise" from a rule people
+remember into a build failure nobody can bypass in a hurry.
+
+---
+
+## Configuration profiles
+
+Deployments differ. Rather than dozens of independent switches — which produce
+thousands of combinations nobody tested — Ai-Auth ships named profiles.
+
+| Profile | Meaning |
+| --- | --- |
+| `strict` | Passkey or hardware key only. No phishable path anywhere, including recovery. |
+| `balanced` | **Default.** Passkey required for sensitive actions; social login permitted for ordinary use. |
+| `legacy` | Social and email paths permitted everywhere. Migration only. |
+
+Two kinds of setting, and only one of them gets a switch:
+
+| Kind | Example | Configurable |
+| --- | --- | --- |
+| Policy — the deployment's risk appetite | Which factors, session lifetime, which providers | ✅ Yes |
+| Safety rail — no legitimate reason to disable | Exact redirect URI match, PKCE required, reject `alg: none`, verify passkey origin | ❌ No |
+
+⚠️ Most operators never change defaults, so the default profile is the real
+security level of the product. Flag names state the risk plainly —
+`allow_phishable_recovery: true`, never `easy_recovery: true`. Nobody enables
+the first by accident.
+
+The admin console reports the **effective** assurance level computed from the
+running configuration, because security is set by the weakest permitted path,
+not the strongest available one. Startup refuses incoherent combinations, such
+as a passkey-only login policy beside email-link recovery.
 
 ---
 
@@ -193,12 +414,30 @@ Every request re-evaluated. No implicit trust from network position.
 
 ## Authentication policy
 
-| Actor | Requirement |
-| --- | --- |
-| Operator setup | Facebook + Google + passkey |
-| Operator daily | Passkey, or both socials |
-| Shopper | Facebook, passkey optional |
-| Staff | Console-managed, no self-signup |
+The table below is the `balanced` **default profile**, not a fixed rule.
+
+| Actor | Default requirement | Phishable path? | Under `strict` |
+| --- | --- | --- | --- |
+| Operator setup | Facebook + Google + passkey | ❌ No — all three required | Unchanged |
+| Operator daily | Passkey, or both socials | ⚠️ Yes, via the social path | Passkey only |
+| Shopper | Facebook, passkey optional | ⚠️ Yes — the default path | Passkey required |
+| Staff | Console-managed, no self-signup | ⚠️ Factor not yet specified | Passkey required |
+
+⚠️ Under `balanced` the social path is proxy-phishable (T1 Path A), so an
+operator's passkey does not raise their assurance level on its own — the weakest
+permitted path sets it. What carries the weight is the step-up requirement on
+sensitive actions: a stolen social session can read, but cannot change
+credentials, move money, or alter tenant settings. Set `profile: strict` to
+remove the weak paths entirely.
+
+⚠️ Recovery must move with the login policy. A `strict` login path beside
+email-link recovery is still an email-link system — see T3. Enrolling a second
+credential at signup is what makes strict recovery survivable, and matters more
+than any recovery flow design.
+
+⚠️ The `Staff` row describes provisioning, not authentication. It says who may
+obtain an account, not what proves their identity at login. That gap needs
+closing.
 
 ---
 
