@@ -49,7 +49,9 @@ fast-path is the UX answer, not a lowered bar.
 
 ## Architecture
 
-Three services, three languages, one public door.
+Six services in two planes, three languages, one public door. One container
+per service — the boundary follows the language, the skill, and the blast
+radius.
 
 ```text
                       [ Mobile / Web Client ]
@@ -84,6 +86,13 @@ Three services, three languages, one public door.
 | `api` | Python | Tenants, policy, admin |
 | `worker` | Python | Webhooks, audit export, batch jobs |
 | `console` | TypeScript | Admin and self-service UI |
+
+### Integration — any website, any mobile app
+
+Every client integrates through the gateway's standard OIDC / OAuth 2.1
+surface; anything OIDC-certified works with no code from us. Client kits that
+make the secure path the easy path live in [sdk/](sdk/); mobile-specific
+guidance is in [docs/mobile-integration.md](docs/mobile-integration.md).
 
 ---
 
@@ -265,16 +274,22 @@ way to check the services still agree.
 
 ```text
 proto/      the wire contract, source of truth
-gateway/    Go
-crypto/     Rust
-ai/         Python
+gateway/    Go — public door, tenant boundary, OIDC, sessions
+crypto/     Rust — keys, passkey verification, envelope encryption
+ai/         Python — advisory risk scoring
+api/        Python — control plane: tenants, policy, admin
+worker/     Python — webhooks, audit export, batch jobs
+console/    Next.js — admin and self-service UI
+sdk/        client kits: web, iOS, Android, Flutter, React Native, server
 deploy/     compose files, network configuration
-docs/
+docs/       threat model, backlog, compliance, custody, mobile
 ```
 
-⚠️ Today only `docs/` exists — everything else in this layout is planned. When
-building starts, the first code to land is `proto/` plus the CI guard below, so
-the schema rule is enforced from the very first commit of code.
+⚠️ Every directory exists and holds a README — the service's contract with the
+rest of the system: its job, what it holds, what it must never do, and its
+container hardening. **No code yet, by explicit decision: plan before code.**
+When building starts, the first code to land is `proto/` plus the CI guard
+below, so the schema rule is enforced from the very first commit of code.
 
 CI enforces two invariants:
 
