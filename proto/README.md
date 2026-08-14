@@ -6,7 +6,7 @@ change and its implementations land in one commit that CI verifies together.
 | Fact | Value |
 | --- | --- |
 | Status | ✅ First contract landed — `risk.proto`, guarded by CI |
-| Files | [`risk.proto`](risk.proto) — the `RiskAssessment` message |
+| Files | [`risk.proto`](aiauth/risk/v1/risk.proto) — the `RiskAssessment` message |
 | Transport | gRPC over mutual TLS, no plaintext mode anywhere including dev |
 
 ## The schema guard — the first code this repository ever got

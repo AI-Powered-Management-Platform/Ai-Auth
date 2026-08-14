@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path
 
-PROTO = Path(__file__).resolve().parent.parent / "proto" / "risk.proto"
+PROTO = Path(__file__).resolve().parent.parent / "proto" / "aiauth" / "risk" / "v1" / "risk.proto"
 FORBIDDEN = ("allow", "deny", "decision", "permit", "authorize", "authorise", "grant", "verdict")
 
 def main() -> int:
