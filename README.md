@@ -2,9 +2,19 @@
 
 AI-assisted identity provider. Passkey-first authentication, OIDC provider,
 multi-tenant session control, and risk scoring on every login.
+
+> **Status: design stage.** No code has been written yet. This repository is the
+> architecture, the threat model, and the compliance map.
+
+> **The risk model cannot authorise.** It emits an advisory score and nothing
+> else. Authorisation is decided by the Go gateway from a cryptographic verdict
+> and tenant policy. A CI schema guard fails the build if an `allow`, `deny`, or
+> `decision` field is ever added to `RiskAssessment` — the rule is enforced by
+> the build, not by memory.
+
 This is independence service package base on, API bases, container, communication base on certificate.
 Infrastructure security: CF tunnel, Google PAM, Google Confidential computing 
-Tigh-performance, tri-language identity provider into a production-grade, globally compliant software package, you must move from design concepts to deep technical execution.Here is the master roadmap of the core security domains you need to research and build out deeply in your codebase.
+High-performance, tri-language identity provider into a production-grade, globally compliant software package, you must move from design concepts to deep technical execution.Here is the master roadmap of the core security domains you need to research and build out deeply in your codebase.
 
  🛡️ 1. Cryptography & Hardware Isolation (Rust Core)
 Because your system handles the highest level of security, you must dive deep into how cryptography behaves inside bare-metal memory.Google Confidential Space / Intel SGX / AMD SEV: Study how to package your Rust binary into a Confidential VM, ensuring memory pages are hardware-encrypted by the CPU so root cloud administrators cannot read running data.WebAuthn Passkey Cryptography: Deeply learn the processing of Attestation and Assertion data streams from Apple/Google devices. You must safely store public keys (COSE format) and verify signatures (Ed25519 or ES256) at assembly speeds.Cryptographic Key Lifecycle Management: Architect how the master Key Encryption Key (KEK) is pulled from Google Cloud KMS or HashiCorp Vault to wrap and unwrap individual row Data Encryption Keys (DEKs).
@@ -51,8 +61,12 @@ fast-path is the UX answer, not a lowered bar.
 
 | Document | Contents |
 | --- | --- |
-| [SECURITY.md](SECURITY.md) | Hardening backlog, prioritised |
+| [SECURITY.md](SECURITY.md) | How to report a vulnerability |
 | [docs/threat-model.md](docs/threat-model.md) | T1–T8 attacks and controls |
+| [docs/hardening-backlog.md](docs/hardening-backlog.md) | Prioritised build backlog |
+| [docs/compliance.md](docs/compliance.md) | FAPI 2.0, NIST, PSD2, DORA, SOC 2 — mapped, with gaps |
+| [docs/key-custody.md](docs/key-custody.md) | HSM, FIPS 140-3, key ceremony |
+| [docs/trust-package.md](docs/trust-package.md) | Evidence a regulated buyer asks for |
 
 ⚠️ Read T1 first. Passkeys do not stop session theft after login.
 
@@ -65,7 +79,7 @@ Three services, three languages, one public door.
 ```text
                       [ Mobile / Web Client ]
                                │
-                               ▼  Cloudflare Tunnel — the only public entry
+                               ▼  Ingress adapter — the only public entry
  ┌─────────────────────────────────────────────────────────────┐
  │                GO EDGE API GATEWAY (Master)                 │
  │   Multi-tenant boundary · OIDC routing · owns all state     │
@@ -178,6 +192,26 @@ release builds — set `overflow-checks = true` for the crypto crate; and
 `build.rs` executes arbitrary code at compile time, so a poisoned crate runs on
 CI before any binary ships.
 
+### Cryptographic provider
+
+Primitives sit behind a `CryptoProvider` trait, so the backend is a deployment
+choice rather than a code change.
+
+| Backend | Used by | FIPS 140-3 |
+| --- | --- | --- |
+| RustCrypto / `ring` | Development and non-regulated deployments | ❌ Not validated |
+| `aws-lc-rs` in FIPS mode | `regulated` profile | ✅ Validated |
+| PKCS#11 offload to a customer HSM | `regulated`, customer key custody | ✅ Inherited from the device |
+
+⚠️ This abstraction has to exist before the first crypto call site is written.
+US financial buyers require validated modules, and no pure-Rust library is
+validated or pursuing validation. Adding FIPS later means touching every call
+site in the service that holds the keys — the change nobody wants to review
+under a deadline. Detail in [docs/key-custody.md](docs/key-custody.md).
+
+⚠️ A validated module also *removes* algorithms. Ed25519 is absent from some
+FIPS builds, so ES256 is the safe default for passkey verification.
+
 ---
 
 ## Deployment
@@ -201,6 +235,22 @@ Exporting models to ONNX takes the Python image from roughly 2 GB to 200 MB.
 That is not only a speed decision — it removes most of the packages that would
 otherwise need auditing.
 
+### Ingress
+
+The public door is an adapter. Cloudflare Tunnel is one implementation of it,
+not the architecture.
+
+| Adapter | For |
+| --- | --- |
+| Cloudflare Tunnel | SaaS and self-hosted deployments with no inbound firewall holes |
+| Customer load balancer — F5, NGINX, Envoy | Deployments that terminate their own TLS |
+| Cloud private link | Customer-cloud deployments with no public route at all |
+
+⚠️ A mandatory third-party SaaS in the authentication path fails architecture
+review at any bank: it is an unapproved fourth party, a concentration risk, and
+it terminates TLS. The property worth keeping is *one public door with no
+inbound firewall holes* — not one particular vendor's tunnel.
+
 ### Networks
 
 Three networks, not one. The Guard and the Thinker cannot reach each other —
@@ -209,7 +259,7 @@ keys.
 
 | Network | Members |
 | --- | --- |
-| `edge` | Tunnel + `gateway` |
+| `edge` | Ingress adapter + `gateway` |
 | `net-a` | `gateway` + `crypto` |
 | `net-b` | `gateway` + `ai` |
 
@@ -266,9 +316,69 @@ thousands of combinations nobody tested — Ai-Auth ships named profiles.
 
 | Profile | Meaning |
 | --- | --- |
-| `strict` | Passkey or hardware key only. No phishable path anywhere, including recovery. |
-| `balanced` | **Default.** Passkey required for sensitive actions; social login permitted for ordinary use. |
+| `strict` | **Default.** Passkey or hardware key only. No phishable path anywhere, including recovery. |
+| `balanced` | Passkey required for sensitive actions; social login permitted for ordinary use. |
 | `legacy` | Social and email paths permitted everywhere. Migration only. |
+| `regulated` | `strict`, plus FAPI 2.0 enforcement, customer key custody, validated cryptography, and full audit export. For financial and regulated deployments. |
+
+### Why `strict` is the default
+
+Every user gets the security level a bank would demand, because the parts of
+that level which matter most cost nothing to give away.
+
+| Bank-grade **security** — free once written, on by default | Bank **compliance** — costs real money, `regulated` only |
+| --- | --- |
+| Phishing-resistant login, passkeys and hardware keys | FIPS 140-3 validated module |
+| No bearer credential anywhere — DPoP, DBSC | Customer-held HSM key custody |
+| Fail-closed on every failure path | SOC 2 and ISO 27001 attestations |
+| Key separation, no route from the ML service to the keys | DORA contracts, audit and inspection rights |
+| Short access tokens, one-time refresh tokens | WORM audit retention |
+| Recovery as strong as login | PSD2 dynamic linking for payments |
+| Full audit trail of every decision | Threat-led penetration testing |
+
+The left column is the entire reason for this architecture, and none of it gets
+cheaper by being weakened for a smaller deployment. So it is the default, and
+opting *down* is the deliberate act.
+
+⚠️ **The cost of this choice is real.** Under `strict` a user whose device
+cannot do WebAuthn cannot sign in, and no email link will rescue them. An
+operator who needs that must explicitly select `balanced` or `legacy` and accept
+the phishable path in writing. That is the intent: the weak door is a decision
+somebody made, never a default somebody inherited.
+
+⚠️ **`strict` makes second-credential enrolment mandatory, not a nudge.** A
+synced passkey (iCloud Keychain, Google Password Manager) does survive device
+loss — the user signs into their platform account on a new device and the
+passkey returns. But sync has a price and a boundary. The price: the account is
+now only as strong as the platform account's own recovery, which is why NIST
+caps synced passkeys at AAL2 — the weakest-path rule follows the chain into
+Apple's and Google's buildings. The boundary: device-bound passkeys and hardware
+keys never sync, platform accounts can themselves be lost, and passkeys do not
+cross ecosystems. So high-assurance actors — operators, staff, `regulated`
+deployments — must use non-synced credentials, and for them a single credential
+on a single lost device **is** a permanent lockout. Two credentials before the
+account becomes usable — see the P0 rows in
+[docs/hardening-backlog.md](docs/hardening-backlog.md) §2.
+
+`regulated` is not a stricter set of preferences. It turns on requirements that
+an auditor or a certification body checks, and it fails closed at startup if any
+of them cannot be satisfied.
+
+| Under `regulated` | Enforced |
+| --- | --- |
+| PAR, `iss` response parameter, exact redirect match, `S256` PKCE | FAPI 2.0 Security Profile |
+| Client auth by mTLS or `private_key_jwt` only | No client secrets in redirect flows |
+| Sender-constrained tokens, no bearer path anywhere | DPoP or mTLS-bound |
+| Validated cryptographic provider | FIPS backend or HSM offload |
+| Customer key custody | KEK in the customer's HSM; we cannot decrypt alone |
+| Ingress adapter without a third party | No fourth party in the auth path |
+| Append-only audit log with SIEM export | Retention and WORM export configured |
+| Telemetry egress | Off, allowlist only |
+
+⚠️ Startup refuses to run `regulated` on an unvalidated crypto backend, a
+vendor-held KEK, or a bearer-token configuration. A profile that silently
+degrades is worse than no profile — it produces a deployment that believes it is
+compliant. See [docs/compliance.md](docs/compliance.md).
 
 Two kinds of setting, and only one of them gets a switch:
 
@@ -278,9 +388,13 @@ Two kinds of setting, and only one of them gets a switch:
 | Safety rail — no legitimate reason to disable | Exact redirect URI match, PKCE required, reject `alg: none`, verify passkey origin | ❌ No |
 
 ⚠️ Most operators never change defaults, so the default profile is the real
-security level of the product. Flag names state the risk plainly —
-`allow_phishable_recovery: true`, never `easy_recovery: true`. Nobody enables
-the first by accident.
+security level of the product. That is precisely why the default is the
+strongest profile rather than the most convenient one — an operator who never
+opens the configuration file still ships a phishing-resistant deployment.
+
+Flag names state the risk plainly — `allow_phishable_recovery: true`, never
+`easy_recovery: true`. Nobody enables the first by accident, and every
+step-down is written to the audit log as an explicit downgrade event.
 
 The admin console reports the **effective** assurance level computed from the
 running configuration, because security is set by the weakest permitted path,
@@ -414,30 +528,39 @@ Every request re-evaluated. No implicit trust from network position.
 
 ## Authentication policy
 
-The table below is the `balanced` **default profile**, not a fixed rule.
+The table below is the `strict` **default profile**. Every actor gets a
+phishing-resistant path, and no actor has a weaker one available.
 
-| Actor | Default requirement | Phishable path? | Under `strict` |
+| Actor | Default requirement (`strict`) | Phishable path? | If an operator opts down to `balanced` |
 | --- | --- | --- | --- |
-| Operator setup | Facebook + Google + passkey | ❌ No — all three required | Unchanged |
-| Operator daily | Passkey, or both socials | ⚠️ Yes, via the social path | Passkey only |
-| Shopper | Facebook, passkey optional | ⚠️ Yes — the default path | Passkey required |
-| Staff | Console-managed, no self-signup | ⚠️ Factor not yet specified | Passkey required |
+| Operator setup | Two passkeys, or a passkey plus a hardware key | ❌ None | Facebook + Google + passkey |
+| Operator daily | Passkey or hardware key | ❌ None | Passkey, **or** both socials ⚠️ |
+| Shopper | Passkey or hardware key | ❌ None | Facebook, passkey optional ⚠️ |
+| Staff | Console-provisioned, passkey required at login | ❌ None | Console-provisioned, factor unspecified ⚠️ |
+| Recovery, all actors | Second enrolled credential | ❌ None | Email link ⚠️ |
 
-⚠️ Under `balanced` the social path is proxy-phishable (T1 Path A), so an
-operator's passkey does not raise their assurance level on its own — the weakest
-permitted path sets it. What carries the weight is the step-up requirement on
-sensitive actions: a stolen social session can read, but cannot change
-credentials, move money, or alter tenant settings. Set `profile: strict` to
-remove the weak paths entirely.
+⚠️ Social login is **not** an authenticator under `strict`. It may identify an
+account, never prove it. This is the whole point of the default: the weakest
+permitted path sets the assurance level, so under `strict` there is no weaker
+path for it to be set by.
 
-⚠️ Recovery must move with the login policy. A `strict` login path beside
-email-link recovery is still an email-link system — see T3. Enrolling a second
-credential at signup is what makes strict recovery survivable, and matters more
-than any recovery flow design.
+⚠️ The right-hand column is what an operator gives up by opting down. Under
+`balanced` the social path is proxy-phishable (T1 Path A), so an operator's
+passkey stops raising their assurance level at all. What still carries weight
+there is the step-up requirement on sensitive actions: a stolen social session
+can read, but cannot change credentials, move money, or alter tenant settings.
+Every step-down is written to the audit log.
 
-⚠️ The `Staff` row describes provisioning, not authentication. It says who may
-obtain an account, not what proves their identity at login. That gap needs
-closing.
+⚠️ Recovery moves with the login policy automatically — a `strict` login path
+beside email-link recovery is still an email-link system, so `strict` forbids
+both (T3). Enrolling a second credential at signup is what makes that
+survivable, and it matters more than any recovery flow design. Startup refuses
+a configuration where recovery is weaker than login.
+
+⚠️ The `Staff` row previously described provisioning only — who may obtain an
+account, not what proves their identity at login. Under a `strict` default the
+gap closes by inheritance: staff authenticate with a passkey like everyone else,
+and console provisioning decides only who is allowed to enrol one.
 
 ---
 

@@ -2,7 +2,8 @@
 
 Written 2026-07-30. Each threat lists how it works, why obvious defences fail,
 and which controls actually stop it. Controls map to priorities in
-[../SECURITY.md](../SECURITY.md).
+[hardening-backlog.md](hardening-backlog.md), and to frameworks in
+[compliance.md](compliance.md).
 
 | ID | Threat | Severity |
 | --- | --- | --- |
