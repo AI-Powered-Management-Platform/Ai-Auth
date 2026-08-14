@@ -106,7 +106,7 @@ Each language sits where its own failure mode costs the least.
 
 | Service | Holds keys | Holds state | Public | If compromised, the attacker gets |
 | --- | --- | --- | --- | --- |
-| `gateway` | ❌ | ✅ | ✅ | Ciphertext it cannot read, plus an RPC surface |
+| `gateway` | ❌ | ✅ | ✅ | Ciphertext at rest it cannot read — **but an RPC surface that can ask `crypto` to decrypt and to sign** (see T9) |
 | `crypto` | ✅ | ❌ | ❌ | Everything — but the smallest, most-reviewed code |
 | `ai` | ❌ | ⚠️ behavioural | ❌ | A score generator with no authority |
 
@@ -114,6 +114,15 @@ Python carries the largest dependency tree, so it is the **most likely** service
 to be compromised — and it is given the **least** power. Rust is the least
 likely and holds the most. Likelihood and blast radius run in opposite
 directions; that is the point of the split.
+
+⚠️ This table describes each service's power **in isolation**. It does not
+describe the *seams* between them. Because `gateway` holds no keys, it must ask
+`crypto` for every decrypt and every token signature — so a compromised
+`gateway` becomes a confused deputy that wields `crypto` as a decryption and
+signing oracle. "Holds no keys" bounds a `crypto` bug, not a `gateway` bug.
+The controls that make `crypto` able to *refuse* — purpose-bound, per-tenant,
+rate-limited, individually-audited key operations — are the real fix, tracked
+as T9 in the threat model and §12 in the backlog.
 
 | Language | Chosen for the one thing it alone provides |
 | --- | --- |

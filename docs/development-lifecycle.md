@@ -103,6 +103,7 @@ never pass on agent review alone.
 | Gate | Prevents | Backlog |
 | --- | --- | --- |
 | Schema guard on `RiskAssessment` | The AI ever gaining authority | §7 |
+| Guard self-presence check + pinned CI toolchain | The guard being removed or neutered — who guards the guard (T14) | §12 |
 | `buf breaking` | Silent wire-format breaks between services | — |
 | Secret scanning (pre-commit + push protection) | A key or certificate entering history | §11 |
 | `cargo-deny` / `pip-audit` / `npm audit` | Known-vulnerable or license-poisoned dependencies | §11 |

@@ -41,4 +41,4 @@ See [threat model](../docs/threat-model.md) T8.
 | Never sees an attempt that failed verification | Forged signatures must not exhaust the most expensive service |
 | Never blocks a login by being down | Gateway degrades to band `HIGH` — stricter, not open |
 | Never reaches `crypto` | A compromised ML dependency cannot send one packet toward the keys |
-| Never treats user strings as instructions | Prompt-injection isolation — inputs are data |
+| Never treats user strings as instructions | Prompt-injection isolation — inputs are data. Applies with force to any LLM feature (audit summarizer, policy suggestion): attacker-controlled log fields — user agent, device name, email — must never reach a model as instructions, or a crafted field could make the summariser hide the incident it summarises (T13) |

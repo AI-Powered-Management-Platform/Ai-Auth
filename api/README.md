@@ -28,3 +28,4 @@ service can be down and every login still works.
 | Never issues or validates tokens | That is the gateway's job alone |
 | Never weakens a safety rail | Exact redirect match, PKCE, `alg` allowlist are not settings — [profiles](../README.md#configuration-profiles) |
 | Never writes policy without an audit record | Downgrades are explicit, logged events |
+| Never queries user data through an ORM | Tenant scoping must be visible in review. `sqlc` + `pgx` keep every `WHERE tenant_id` on screen; an ORM hides the query and a missing scope becomes an invisible cross-tenant leak (T10) |

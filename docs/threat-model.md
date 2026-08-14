@@ -15,6 +15,18 @@ and which controls actually stop it. Controls map to priorities in
 | T6 | Credential stuffing | Medium |
 | T7 | Agent delegation abuse | Medium |
 | T8 | Risk model manipulation | Medium |
+| T9 | Gateway confused deputy — crypto as decrypt/sign oracle | Critical |
+| T10 | Cross-tenant decryption via the stateless vault | High |
+| T11 | Token revocation lag — stateless access tokens | High |
+| T12 | Account-linking takeover | High |
+| T13 | Prompt injection into AI features | Medium |
+| T14 | CI and guardrail integrity | Medium |
+| T15 | First-credential bootstrap | Medium |
+
+⚠️ T9–T15 were added 2026-08-14 from an adversarial review of this plan. T1–T8
+model attacks on a *service*; T9–T15 model attacks on the *seams between*
+services — the trust one service places in another. A per-service security
+table cannot see them, which is precisely why they were missed first time.
 
 ---
 
@@ -288,6 +300,139 @@ multiply it.
 | Fail closed on model outage | P0 |
 | Prompt injection isolation | P1 |
 | Adversarial drift monitoring | P2 |
+
+---
+
+## T9 — Gateway confused deputy
+
+The gateway holds no keys, so it asks `crypto` for every decryption and every
+token signature. A compromised gateway therefore does not need keys — it has
+the caller's right to *use* them. `crypto`, being stateless, cannot tell an
+attacker's request from a legitimate one.
+
+| What the gateway can ask crypto to do | What a compromised gateway then gets |
+| --- | --- |
+| Unwrap a DEK, decrypt a row | Every user record, one request at a time |
+| Sign a token | A valid token for any user in any tenant — full impersonation |
+
+The gateway is the largest attack surface in the system (public HTTP, OIDC
+parsing). Putting the keys in Rust bounds a `crypto` bug; it does nothing about
+a `gateway` bug. This is the same error the README warns about for "we used
+Rust" — closing one layer and assuming the rest.
+
+| Control | How it works | P |
+| --- | --- | --- |
+| Purpose-bound key operations | Each request names subject and purpose; crypto signs/decrypts only for that | P0 |
+| Per-tenant authorisation in crypto | A DEK unwraps only against ciphertext of the same tenant — T10 | P0 |
+| Rate and quota limits on unwrap and sign | A decryption flood or a token-minting spree trips a cap, not the whole database | P0 |
+| Individual audit of every key operation | Subject, purpose, caller, outcome — every unwrap and sign is a record | P0 |
+| Signing constrained to bound claims | Crypto refuses to sign a token whose subject/tenant/audience it was not asked for | P1 |
+| Short crypto-session credentials | A stolen gateway→crypto identity expires fast | P1 |
+
+⚠️ The fix is not more isolation. It is making the vault able to **refuse** —
+to authorise the request itself instead of trusting its caller.
+
+---
+
+## T10 — Cross-tenant decryption via the stateless vault
+
+Because `crypto` has no tenant model, tenant isolation lives entirely in the
+gateway and Postgres row-level security. One gateway bug that pairs tenant B's
+wrapped DEK with tenant B's ciphertext — or an ORM query that forgets its
+tenant scope — is a silent cross-tenant breach, and the vault helps.
+
+| Control | P |
+| --- | --- |
+| Per-tenant binding enforced inside crypto (T9) | P0 |
+| Postgres row-level security as defence in depth, not the only line | P0 |
+| No ORM in the control plane — visible `WHERE tenant_id` in every query | P0 |
+| Tenant-scoped DEK derivation — a DEK is cryptographically bound to its tenant | P1 |
+
+---
+
+## T11 — Token revocation lag
+
+A stateless access token validated by signature alone stays valid until it
+expires. DPoP stops a *stolen* token from being replayed; it does nothing when
+a live session must die **now** — after a fired employee, a detected anomaly, a
+credential change. The window is the access-token TTL: 5–15 minutes.
+
+| Control | Decision | P |
+| --- | --- | --- |
+| Access token = DPoP-bound JWT | Sender-constrained, not bearer | P0 |
+| Every call checks a Redis revocation filter, authority in Postgres | Turns "instant revocation" from a claim into a mechanism | P0 |
+| Short access TTL bounds the worst case | Minutes | P0 |
+| CAEP push revocation to relying parties | Cross-app sign-out | P1 |
+
+⚠️ Decided 2026-08-14: revocation is not left to TTL expiry. The Redis filter
+is checked on every request; a false positive over-revokes (safe direction),
+Postgres is the authority, and the filter is updated on revoke.
+
+---
+
+## T12 — Account-linking takeover
+
+Binding several identities to one account (feature A) is a classic takeover
+path: an attacker links their own social identity to a victim's account, or
+claims a victim's unverified email during linking.
+
+| Control | P |
+| --- | --- |
+| Re-authentication before any link or unlink | P0 |
+| Verified ownership of the identity being linked | P0 |
+| Owner notification on every link and unlink | P0 |
+| No linking by unverified email match alone | P0 |
+| Linking is a sensitive action — step-up required | P1 |
+
+---
+
+## T13 — Prompt injection into AI features
+
+The audit summarizer and policy-suggestion features read fields an attacker
+controls — user agent, device name, email, reasons. If any of these reach an
+LLM as instructions, a crafted field can make the summariser downplay or hide
+the very incident it describes, or steer a suggested policy toward weakness.
+
+| Control | P |
+| --- | --- |
+| Attacker-controlled fields are data, never instructions | P1 |
+| AI features never authorise or auto-apply — human confirms | P0 |
+| Structured, escaped inputs to any model; no raw log concatenation | P1 |
+| Output treated as a draft, shown beside the raw record | P1 |
+
+---
+
+## T14 — CI and guardrail integrity
+
+The schema guard that stops the AI ever authorising runs in CI. A poisoned CI
+dependency, or a change to the guard itself, can neuter the check and leave the
+build green. The same class as the `build.rs` risk the README already names.
+
+| Control | P |
+| --- | --- |
+| Guardrail files are Tier-1 review — agents never self-modify them | P0 |
+| CI runs from a pinned, hash-locked toolchain | P0 |
+| Protected branches; no admin merge on a red build | P0 |
+| The guard verifies its own presence — a removed check fails the build | P1 |
+| Signed commits and signed CI runners | P2 |
+
+See [development-lifecycle.md](development-lifecycle.md) §3 and §5.
+
+---
+
+## T15 — First-credential bootstrap
+
+`strict` requires two credentials, but what authorises the *first* one at
+signup? Account creation is the weakest moment: no prior credential exists to
+prove the enroller is the legitimate owner.
+
+| Control | P |
+| --- | --- |
+| Verify the identity channel before first enrolment | P0 |
+| Enrol the second credential in the same trusted session | P0 |
+| Owner notification on first-credential enrolment | P0 |
+| Risk-gate the enrolment — a hostile signup context blocks it | P1 |
+| Operator/staff first credential is console-provisioned, not self-served | P1 |
 
 ---
 

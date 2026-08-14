@@ -56,4 +56,5 @@ request. Full hierarchy: [key custody](../docs/key-custody.md) §4.
 | Never parses raw internet input | Every HTTP parsing bug would be a bug in the process holding the KEK |
 | Never logs key material or plaintext | An entire leak class, removed |
 | Never falls back when KMS is unreachable | No unwrap → encrypted reads fail. Fail closed |
+| Never decrypts or signs without an authorised, purpose-bound request | A stateless vault that obeys its caller blindly is a decryption and signing oracle — T9. Each request names the subject and purpose; cross-tenant DEK/ciphertext pairings are rejected; unwrap and sign rates are capped and individually audited |
 | Never reaches `ai` | No network path exists, by design |

@@ -224,6 +224,31 @@ Regulated buyers purchase the audit trail as much as the authentication.
 
 ---
 
+## 12. Inter-service trust — the seams
+
+Added 2026-08-14 from the adversarial review. T1–T11 controls above harden
+services; these harden the trust *between* them, where the confused-deputy
+class lives ([threat-model.md](threat-model.md) T9–T15).
+
+| P | Feature | Detail |
+| --- | --- | --- |
+| P0 | Purpose-bound key operations | Every crypto call names subject and purpose; crypto acts only within it — T9 |
+| P0 | Per-tenant authorisation inside crypto | A DEK unwraps only against same-tenant ciphertext — T10 |
+| P0 | Rate and quota caps on unwrap and sign | A decryption flood or token-minting spree trips a cap — T9 |
+| P0 | Per-operation key-op audit | Subject, purpose, caller, outcome — every unwrap and sign recorded — T9 |
+| P0 | Revocation checked every request | Redis filter, Postgres authority — closes the TTL window — T11 |
+| P0 | No ORM in the control plane | Tenant scope visible in every query — T10 |
+| P0 | Re-auth and verified ownership on account linking | T12 |
+| P0 | Verified channel before first-credential enrolment | T15 |
+| P1 | AI features never auto-apply; injection isolation | T13 |
+| P0 | Guardrail files Tier-1; pinned CI toolchain; protected branches | T14 |
+
+⚠️ The single most important row is the first: a stateless vault that cannot
+refuse its caller is a decryption and signing oracle. Making it able to say no
+is what the phrase "the vault holds the keys" was supposed to mean.
+
+---
+
 ## Sources
 
 - [DBSC explained](https://www.corbado.com/blog/device-bound-session-credentials-dbsc)
