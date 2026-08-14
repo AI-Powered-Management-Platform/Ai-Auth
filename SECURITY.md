@@ -1,169 +1,144 @@
-# Ai-Auth — security hardening backlog
+# Security policy
 
-Researched 2026-07-30 against current standards and live attack data. Each item
-is a feature to build, not advice.
+How to report a vulnerability in Ai-Auth, and what happens after you do.
 
-Priority: **P0** ship before first real user · **P1** before paid tenants ·
-**P2** roadmap.
+⚠️ **Status: design stage.** No code has shipped, so there is nothing running to
+attack yet. This policy exists now so that it is in place before the first line
+of code, not bolted on after the first report arrives in a public issue.
 
-Attack mechanics behind these controls: [docs/threat-model.md](docs/threat-model.md).
-
----
-
-## 1. The gap passkeys do not close
-
-Passkeys defeat phishing at login. They do nothing after login. Adversary-in-
-the-middle proxies now steal the session token instead of the password.
-
-| Fact | Number |
+| Looking for | Go to |
 | --- | --- |
-| AiTM incident growth | Up 146% in a year |
-| Detected daily | Roughly 40,000 |
-| Tycoon 2FA share | 62% of Microsoft-blocked phishing |
-
-Evilginx3, Tycoon 2FA, and Mamba 2FA sell this as a service. Login-time
-hardening alone is not a defence.
-
-| P | Feature | Detail |
-| --- | --- | --- |
-| P0 | Refresh token rotation | One-time use, family revoke on reuse |
-| P0 | Short access token TTL | Minutes, not hours |
-| P0 | DPoP sender-constrained tokens | RFC 9449, proof-of-possession per call |
-| P1 | DBSC session binding | TPM-bound cookie, Chrome 146 GA |
-| P1 | mTLS-bound tokens option | RFC 8705, for machine clients |
-| P1 | Proxy-phishing signals | Impossible-latency, header, TLS mismatch |
-
-DBSC shipped generally available on Windows Chrome in April 2026. It binds the
-session cookie to hardware, so a stolen cookie is useless off-device.
+| The hardening backlog | [docs/hardening-backlog.md](docs/hardening-backlog.md) |
+| Attack mechanics, T1–T8 | [docs/threat-model.md](docs/threat-model.md) |
+| Framework and certification mapping | [docs/compliance.md](docs/compliance.md) |
 
 ---
 
-## 2. ⚠️ Fallback parity — your biggest self-inflicted hole
+## Reporting
 
-A passkey-first system with an SMS or email OTP escape hatch is an SMS system.
-The attacker simply picks the weak door. Recovery is authentication.
+**Do not open a public issue for a security bug.** Use one of these:
 
-| P | Feature | Detail |
+| Channel | Use for | How |
 | --- | --- | --- |
-| P0 | No phishable primary fallback | Never SMS as sole recovery |
-| P0 | Recovery strength equals login | Same assurance level required |
-| P0 | Downgrade events logged | Every step-down is an audit record |
-| P0 | Risk-gated step-down | New device blocks weak fallback |
-| P1 | Multi-passkey enrolment nudge | Two credentials, not one |
-| P1 | Trusted-contact recovery | Human path, no support ticket |
-| P2 | Delayed recovery window | Time lock plus owner notification |
+| GitHub private vulnerability reporting | Everything, preferred | Security tab → *Report a vulnerability* |
+| Encrypted email | If you cannot use GitHub | `TODO: security@<domain>` — PGP key at `TODO` |
+
+⚠️ Both rows above need filling in before this repository takes real users.
+Private vulnerability reporting must be enabled in repository settings, and the
+mailbox must exist and be monitored.
+
+### What to include
+
+The more of this you send, the faster it moves.
+
+| Field | Why |
+| --- | --- |
+| Affected component | `gateway`, `crypto`, `ai`, `api`, `worker`, `console` |
+| Version or commit | Exactly what you tested |
+| Reproduction steps | Ideally a script or request sequence |
+| Impact | What an attacker gains, concretely |
+| Suggested fix | Optional, always welcome |
+
+Report in any language you are comfortable writing. If English is not your first
+language, send it in yours — a translated report is better than a delayed one.
 
 ---
 
-## 3. Continuous access — stop trusting old decisions
+## What we commit to
 
-A session issued an hour ago has no idea the user was fired, the device was
-wiped, or the password was breached.
+| Stage | Target |
+| --- | --- |
+| Acknowledge receipt | 3 business days |
+| Initial severity assessment | 10 business days |
+| Fix or documented mitigation — critical | 30 days |
+| Fix or documented mitigation — high | 60 days |
+| Fix or documented mitigation — medium and low | 90 days |
+| Public advisory after a fix ships | 7 days |
 
-| P | Feature | Detail |
-| --- | --- | --- |
-| P1 | Shared Signals Framework | Transmit and receive security events |
-| P1 | CAEP session events | Session revoked, assurance changed |
-| P1 | RISC account events | Credential compromise, account disabled |
-| P1 | OIDC back-channel logout | Real global sign-out across clients |
-| P2 | Policy re-evaluation mid-session | Revoke on signal, not on expiry |
+We will keep you updated at least every 14 days while a report is open, tell you
+when a fix lands, and credit you in the advisory unless you ask us not to.
 
-SSF, CAEP, and RISC are final OpenID Foundation specs. Google, Apple, IBM,
-Okta, SailPoint, Thales, and Beyond Identity have shipped implementations.
-Keycloak merged an SSF transmitter in May 2026 behind an experimental flag.
-Shipping this makes Ai-Auth interoperable with enterprise buyers.
-
----
-
-## 4. Agent identity — the reason to call it Ai-Auth
-
-AI agents acting for users is the live 2026 problem. Nobody has a clean answer,
-which is exactly the gap a new IdP can own.
-
-| P | Feature | Detail |
-| --- | --- | --- |
-| P1 | RFC 8693 token exchange | Subject token plus actor token |
-| P1 | Delegation not impersonation | Token records user and agent |
-| P1 | Audience-restricted tokens | Bound to one resource server |
-| P1 | Delegation depth limit | Cap recursive agent chains |
-| P1 | Agent registry | First-class non-human identities |
-| P2 | Autonomy mode flag | Acting alone vs acting for user |
-| P2 | AuthZEN authorization API | External decision point |
-| P2 | Per-agent revocation | Kill one agent, keep the user |
-
-Reference work: OpenID "Identity Management for Agentic AI" (Oct 2025), AIMS
-standard (Mar 2026), CSA Agentic Trust Framework (Feb 2026).
+Severity follows CVSS v4.0, adjusted for exploitability in a default
+`strict` deployment. A finding that only applies when an operator has opted
+down to `balanced` or `legacy` is still valid — say which profile it needs.
 
 ---
 
-## 5. Authorization request hardening
+## Coordinated disclosure
 
-| P | Feature | Detail |
-| --- | --- | --- |
-| P0 | PKCE mandatory | No exceptions, no plain method |
-| P0 | Exact redirect URI match | No wildcards, no prefix match |
-| P0 | JWT algorithm allowlist | Blocks `none` and alg confusion |
-| P1 | PAR (RFC 9126) | Request never transits the browser |
-| P1 | JAR and JARM | Signed request and response |
-| P2 | FAPI 2.0 profile | Financial-grade conformance |
+We ask for **90 days** before public disclosure, or until a fix ships —
+whichever comes first. If a fix will take longer than 90 days we will say so and
+explain why rather than go quiet.
 
----
-
-## 6. Credential and account integrity
-
-| P | Feature | Detail |
-| --- | --- | --- |
-| P0 | Breached password check | k-anonymity, per NIST blocklist rule |
-| P0 | Enumeration resistance | Identical response and timing |
-| P0 | Re-auth for credential change | Fresh proof before adding passkey |
-| P0 | Full WebAuthn verification | Origin, RP ID, sign count, attestation |
-| P1 | WebAuthn Signal API | Purge stale credentials from picker |
-| P1 | Step-up on sensitive actions | `acr_values` and `max_age` |
-| P1 | Cross-device flow binding | Hybrid transport, no bare device code |
-| P2 | AAL mapping to 800-63-4 | Syncable AAL2, device-bound AAL3 |
-
-NIST SP 800-63-4 was finalised in July 2025. Syncable passkeys are explicitly
-accepted at AAL2; AAL3 still needs device-bound hardware.
+If a vulnerability is being actively exploited, tell us immediately and we will
+compress the timeline. Publishing before a fix is available is your right, but
+it puts deployments at risk; talk to us first.
 
 ---
 
-## 7. AI-specific risk
+## Safe harbour
 
-| P | Feature | Detail |
-| --- | --- | --- |
-| P0 | Risk model cannot authorise | Advisory score, never the decision |
-| P0 | Fail-closed on model outage | Degrade to strict, never to open |
-| P1 | Prompt injection isolation | User strings are data only |
-| P1 | Model decision audit trail | Every score explainable and stored |
-| P2 | Adversarial drift monitoring | Detect poisoned behaviour baselines |
+We will not pursue legal action, and will not ask a third party to, against
+anyone who acts in good faith under this policy. Good faith means:
 
----
+| Do | Do not |
+| --- | --- |
+| Test only against your own deployment or accounts | Touch other people's data |
+| Stop at proof of concept | Pivot, persist, or exfiltrate |
+| Report promptly and privately | Publish before the timeline agreed |
+| Respect rate limits | Run denial-of-service or load tests |
+| Use test accounts and test tenants | Social-engineer staff or users |
 
-## 8. Post-quantum readiness
-
-| P | Feature | Detail |
-| --- | --- | --- |
-| P1 | Hybrid TLS key exchange | X25519 plus ML-KEM-768 |
-| P2 | ML-DSA token signing | When JOSE support lands |
-| P2 | Crypto inventory and agility | Swap algorithms without redeploy |
-
-⚠️ WebAuthn itself is still ECDSA. Post-quantum passkeys do not exist yet, so
-plan for a credential re-enrolment event later this decade.
+If you are unsure whether an action is in scope, ask first. We would rather
+answer a question than argue about a boundary afterwards.
 
 ---
 
-## Sources
+## Scope
 
-- [DBSC explained](https://www.corbado.com/blog/device-bound-session-credentials-dbsc)
-- [Passkeys vs MFA fallbacks](https://workos.com/blog/passkeys-stop-ai-phishing-mfa-fallbacks)
-- [AiTM phishing detection 2026](https://www.stingrai.io/blog/adversary-in-the-middle-aitm-phishing-detection-2026)
-- [Token-based MFA bypass](https://www.obsidiansecurity.com/blog/token-based-attacks-how-attackers-bypass-mfa)
-- [OpenID CAEP 1.0 final](https://openid.net/specs/openid-caep-1_0-final.html)
-- [Shared Signals specifications](https://openid.net/wg/sharedsignals/specifications/)
-- [OpenID approves three signal standards](https://www.biometricupdate.com/202509/openid-approves-3-standards-for-sharing-real-time-digital-identity-security-signals)
-- [Keycloak SSF transmitter](https://skycloak.io/blog/keycloak-caep-shared-signals-continuous-access/)
-- [IETF AI agent auth draft](https://www.ietf.org/archive/id/draft-klrc-aiagent-auth-00.html)
-- [OAuth token exchange for agents](https://www.strata.io/blog/agentic-identity/why-agentic-ai-demands-more-from-oauth-6a/)
-- [AuthZEN at Identiverse 2026](https://openid.net/authzen-at-identiverse-2026-authorization-in-the-agent-era/)
-- [NIST SP 800-63B-4 final](https://csrc.nist.gov/pubs/sp/800/63/b/4/final)
-- [NIST PQC standards](https://www.paloaltonetworks.com/cyberpedia/pqc-standards)
+### In scope
+
+| Area |
+| --- |
+| Authentication and session handling in `gateway` |
+| Cryptographic verification, key handling, and encryption in `crypto` |
+| Tenant isolation and authorisation boundaries anywhere |
+| Any path by which the `ai` service influences an authorisation outcome |
+| OIDC and OAuth 2.1 protocol conformance flaws |
+| Token issuance, binding, rotation, and revocation |
+| Admin console and control-plane APIs |
+| Build, release, and supply-chain integrity |
+
+### Out of scope
+
+| Area | Why |
+| --- | --- |
+| Findings from automated scanners with no demonstrated impact | Noise |
+| Missing headers with no exploit path | Report as a normal issue |
+| Denial of service by volume | Test against your own deployment only |
+| Social engineering of staff or users | Not a software defect |
+| Vulnerabilities in third-party dependencies | Report upstream; tell us so we can pin or patch |
+| Anything requiring a rooted device plus physical access plus the unlock code | Outside the threat model — see [docs/threat-model.md](docs/threat-model.md) |
+
+⚠️ Session theft after a successful login (T1) **is in scope** and is the
+highest-value finding in this system. Passkeys do not close it.
+
+---
+
+## Rewards
+
+There is no bug bounty at the design stage — it would be dishonest to advertise
+one with no funding behind it. Every valid report gets credit in the advisory
+and in the release notes. A bounty programme will be announced here if and when
+it is funded.
+
+---
+
+## Supported versions
+
+| Version | Supported |
+| --- | --- |
+| — | Nothing has been released yet |
+
+Once releases begin, the current minor version and the one before it receive
+security fixes.

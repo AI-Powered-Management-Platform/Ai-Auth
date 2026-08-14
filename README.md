@@ -2,48 +2,32 @@
 
 AI-assisted identity provider. Passkey-first authentication, OIDC provider,
 multi-tenant session control, and risk scoring on every login.
-This is independence service package base on, API bases, container, communication base on certificate.
-Infrastructure security: CF tunnel, Google PAM, Google Confidential computing 
-Tigh-performance, tri-language identity provider into a production-grade, globally compliant software package, you must move from design concepts to deep technical execution.Here is the master roadmap of the core security domains you need to research and build out deeply in your codebase.
 
- 🛡️ 1. Cryptography & Hardware Isolation (Rust Core)
-Because your system handles the highest level of security, you must dive deep into how cryptography behaves inside bare-metal memory.Google Confidential Space / Intel SGX / AMD SEV: Study how to package your Rust binary into a Confidential VM, ensuring memory pages are hardware-encrypted by the CPU so root cloud administrators cannot read running data.WebAuthn Passkey Cryptography: Deeply learn the processing of Attestation and Assertion data streams from Apple/Google devices. You must safely store public keys (COSE format) and verify signatures (Ed25519 or ES256) at assembly speeds.Cryptographic Key Lifecycle Management: Architect how the master Key Encryption Key (KEK) is pulled from Google Cloud KMS or HashiCorp Vault to wrap and unwrap individual row Data Encryption Keys (DEKs).
-🚀 2. Ultra-High Performance & Transport Security (Go Core)
-Go owns your network edge. You must configure it to withstand intense adversarial traffic without breaking.Mutual TLS (mTLS) Mesh Network: Design an automated internal Certificate Authority (CA) pattern (like using cert-manager or HashiCorp Vault) to rotate short-lived SSL/TLS certificates for Go-Rust-Python internal gRPC communication.Zero-Allocation Network Primitives: Study how Go's sync.Pool avoids object allocation garbage collection overhead during millions of incoming login routing cycles.OIDC/OAuth2 PKCE Validation Engine: Master the exact verification mechanics of cryptographic code_challenge state tracking to eliminate authorization-code interception on mobile. ⚠️ PKCE closes code interception only — it does not stop an adversary-in-the-middle proxy, which relays the whole flow and takes the issued session at the end. See T1 Path A.
+> **Status: design stage.** No code has been written yet. This repository is the
+> architecture, the threat model, and the compliance map.
 
-🧠 3. Invisible Threat Detection & Isolation (Python Worker)
-Your AI must operate with maximum defense-in-depth, treating Python packages as potentially vulnerable.ONNX Engine & C-Extension Optimization: Research how to export models from Python into .onnx formats to entirely bypass the Python Global Interpreter Lock (GIL) and cut container image sizes down.Real-time Behavioral Velocity Graphing: Figure out how to securely stream time-series metadata (login speeds, impossible physical travel times, device fingerprint mutations) from Go to Python within a strict 50ms processing window.Secure Python Dependency Isolation: Implement strict supply-chain checking (pip-audit, container scanning) to safeguard the Python container against third-party machine learning package vulnerabilities.
-📂 4. Global Data Privacy & Database Engineering (DB Layer)
-You must translate "world law" into strict database actions so that you remain globally compliant automatically.Application-Layer Envelope Encryption (Blind Indexing): Write the specific SQL structures and Go logic to search for user profiles via salted HMAC blind indexes, so that no plain-text emails or names exist in the database.Cryptographic Account Shredding: Build the cascading delete logic that ensures destroying a single user's encryption key instantly sanitizes all historic database backups without altering the active immutable ledger.Multi-Region Partitioning (Data Sovereignty): Study how databases like CockroachDB or Google Spanner natively route data rows to specific global geographic locations based on the user's home country.
+> **The risk model cannot authorise.** It emits an advisory score and nothing
+> else. Authorisation is decided by the Go gateway from a cryptographic verdict
+> and tenant policy. A CI schema guard fails the build if an `allow`, `deny`, or
+> `decision` field is ever added to `RiskAssessment` — the rule is enforced by
+> the build, not by memory.
 
-🏛️ 5. Operational Security & Open-Source Supply Chain (SecOps)As an open-source project, your repository settings matter just as much as your code statements.Responsible Vulnerability Disclosures: Set up automated GitHub private vulnerability reporting tools so ethical hackers can submit security bugs away from public GitHub issues.Automated Secret Scanners: Integrate pre-commit and post-commit hooks like TruffleHog to guarantee that no internal development TLS certificate or production API key ever leaks into public Git history.
-
-Securely connect mobile applications (built in platforms like iOS, Android, Flutter, or React Native) to your advanced Go/Rust/Python identity provider, you must dive deeply into mobile-specific security architecture.Unlike web browsers, mobile apps run inside a sandbox on a physical hardware device, communicate over unstable mobile networks, and cannot securely use traditional HTTP-only web cookies.Here is the deep-dive technical roadmap of the security concepts and implementation primitives you must master for mobile integration.
-
-🛡️ 1. OAuth2/OIDC with PKCE (Proof Key for Code Exchange)
-Standard OAuth2 is vulnerable on mobile devices because malicious apps can intercept redirect deep links. PKCE solves this by forcing a dynamic cryptographic proof for every single login session.The Cryptographic Handshake: Your Go Core Gateway must expose an explicit /authorize and /token endpoint that enforces the PKCE protocol.The mobile app creates a random string on the fly (code_verifier).The app hashes it using SHA-256 (code_challenge).Your Go Gateway saves this challenge. When exchanging the temporary code for tokens later, Go hashes the provided verifier. If it matches the challenge, Go issues the tokens.Deep Link Hijacking Prevention: You must teach mobile developers how to configure Universal Links (iOS) and App Links (Android). These verify that only their official app can intercept the authentication callback URL by matching a digital signature file (apple-app-site-association or assetlinks.json) hosted publicly on your Go router.
-
-🔑 2. Native Mobile Passkeys (WebAuthn Native API)
-Your users want biometric login (FaceID, TouchID, or Fingerprint) that works directly via the device's secure hardware.ASWebAuthenticationSession (iOS) & Credential Manager (Android): Mobile apps should not build custom web forms for logins. They must use the operating system's native secure browser modules. These modules hook directly into the phone’s hardware enclave to securely pass passkey public-key signatures back to your Rust Cryptography Core for absolute validation.Passkey Syncing Security: Understand how passkeys roam and sync via iCloud Keychain or Google Password Manager. Your system must handle scenarios where a passkey is securely shared across a user's multi-device ecosystem while maintaining strict multi-tenant validation
-
-📦 3. Secure On-Device Storage (Hardware Enclaves)
-Once your Go engine issues an Access Token and a long-lived Refresh Token to the mobile app, storing them insecurely (like in plain text files) will result in immediate token theft if a device is rooted or compromised.iOS Keychain Services: Learn how to utilize the iOS Keychain with strict accessibility attributes (e.g., kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly). This guarantees tokens are hardware-encrypted and can never leave that specific physical phone via an iCloud backup.Android Keystore & EncryptedSharedPreferences: Master Android's hardware-backed keystore provider. This isolates cryptographic keys from the application code space, ensuring that even if the app's process is memory-inspected, the master token-encryption keys remain hidden inside the device's secure hardware layer
-
-📡 4. Advanced Network Defense & Telemetry Extraction
-Mobile network traffic is easily intercepted via public Wi-Fi networks using Man-in-the-Middle (MitM) tools. Your system must actively protect the transport layer.Strict SSL/TLS Pinning: Teach mobile clients how to implement certificate pinning. The mobile app will reject any connection to your Go Gateway unless the server presents the exact cryptographic public key certificate hardcoded into the app. This makes public Wi-Fi traffic sniffing impossible.Mobile Telemetry Injection for your Python AI: Your mobile app must capture unique mobile signals to stream to your Python AI Worker for accurate risk scoring. You need to gather:Device Integrity Attestation: Using Google Play Integrity API (Android) or DeviceCheck/App Attest (iOS) to cryptographically prove the app hasn't been cracked, modified, or run inside a malicious emulator.Network Velocity: Rapidly changing IP addresses or cellular carrier switching to flag potential location-spoofing or proxy usage
-
-🛑 5. Mobile Session Lifecycle & Instant Revocation
-Mobile users rarely log out. Sessions can last for months, making an active mobile token a high-value target.Short Access / Long Refresh Pattern: Keep Access Tokens valid for only 5 to 15 minutes. Issue Refresh Tokens that last for weeks but are rotated on every single use (Refresh Token Rotation). If a hacker steals a used refresh token and tries to reuse it, your Go engine will instantly invalidate the entire session tree.Real-time Push Revocation: If your Python AI worker detects a severe risk anomaly elsewhere on the account, your system must use a high-speed backchannel (like Redis Bloom Filters or Firebase Silent Push Notifications) to instantly flag the on-device mobile storage to wipe its local tokens immediately.
-
+Ai-Auth is an independent service package: API-based, containerized, and with
+every internal hop authenticated by certificates. Infrastructure security
+builds on a single tunneled ingress, privileged-access management, and
+confidential computing. The goal is a high-performance, tri-language identity
+provider shipped as a production-grade, globally compliant package — the same
+security level for every user on the planet, with regional law handled by
+configuration, not by forks.
 
 | Item | Value |
 | --- | --- |
 | Edge gateway | Go |
 | Crypto core | Rust |
 | Risk worker | Python |
-| Control plane | Python / FastAPI |
+| Control plane | Go |
 | Console | Next.js |
-| Store | Postgres + Redis |
+| Store | Postgres + Redis — [one of each, nothing else](docs/data-layer.md) |
 | Status | Design stage |
 
 ⚠️ Security-first rule: never weaken auth for convenience. The passkey
@@ -51,8 +35,15 @@ fast-path is the UX answer, not a lowered bar.
 
 | Document | Contents |
 | --- | --- |
-| [SECURITY.md](SECURITY.md) | Hardening backlog, prioritised |
+| [SECURITY.md](SECURITY.md) | How to report a vulnerability |
 | [docs/threat-model.md](docs/threat-model.md) | T1–T8 attacks and controls |
+| [docs/hardening-backlog.md](docs/hardening-backlog.md) | Prioritised build backlog |
+| [docs/compliance.md](docs/compliance.md) | FAPI 2.0, NIST, PSD2, DORA, SOC 2 — mapped, with gaps |
+| [docs/key-custody.md](docs/key-custody.md) | HSM, FIPS 140-3, key ceremony |
+| [docs/trust-package.md](docs/trust-package.md) | Evidence a regulated buyer asks for |
+| [docs/mobile-integration.md](docs/mobile-integration.md) | iOS, Android, Flutter, React Native — client-side security |
+| [docs/development-lifecycle.md](docs/development-lifecycle.md) | How code gets built — agents propose, humans decide, CI enforces |
+| [docs/data-layer.md](docs/data-layer.md) | One Postgres + one Redis — schemas, roles, tenancy, residency |
 
 ⚠️ Read T1 first. Passkeys do not stop session theft after login.
 
@@ -60,12 +51,14 @@ fast-path is the UX answer, not a lowered bar.
 
 ## Architecture
 
-Three services, three languages, one public door.
+Six services in two planes, three languages, one public door. One container
+per service — the boundary follows the language, the skill, and the blast
+radius.
 
 ```text
                       [ Mobile / Web Client ]
                                │
-                               ▼  Cloudflare Tunnel — the only public entry
+                               ▼  Ingress adapter — the only public entry
  ┌─────────────────────────────────────────────────────────────┐
  │                GO EDGE API GATEWAY (Master)                 │
  │   Multi-tenant boundary · OIDC routing · owns all state     │
@@ -92,9 +85,16 @@ Three services, three languages, one public door.
 
 | Service | Language | Job |
 | --- | --- | --- |
-| `api` | Python | Tenants, policy, admin |
-| `worker` | Python | Webhooks, audit export, batch jobs |
+| `api` | Go | Tenants, policy, admin |
+| `worker` | Go | Webhooks, audit export, batch jobs |
 | `console` | TypeScript | Admin and self-service UI |
+
+### Integration — any website, any mobile app
+
+Every client integrates through the gateway's standard OIDC / OAuth 2.1
+surface; anything OIDC-certified works with no code from us. Client kits that
+make the secure path the easy path live in [sdk/](sdk/); mobile-specific
+guidance is in [docs/mobile-integration.md](docs/mobile-integration.md).
 
 ---
 
@@ -106,7 +106,7 @@ Each language sits where its own failure mode costs the least.
 
 | Service | Holds keys | Holds state | Public | If compromised, the attacker gets |
 | --- | --- | --- | --- | --- |
-| `gateway` | ❌ | ✅ | ✅ | Ciphertext it cannot read, plus an RPC surface |
+| `gateway` | ❌ | ✅ | ✅ | Ciphertext at rest it cannot read — **but an RPC surface that can ask `crypto` to decrypt and to sign** (see T9) |
 | `crypto` | ✅ | ❌ | ❌ | Everything — but the smallest, most-reviewed code |
 | `ai` | ❌ | ⚠️ behavioural | ❌ | A score generator with no authority |
 
@@ -115,11 +115,26 @@ to be compromised — and it is given the **least** power. Rust is the least
 likely and holds the most. Likelihood and blast radius run in opposite
 directions; that is the point of the split.
 
+⚠️ This table describes each service's power **in isolation**. It does not
+describe the *seams* between them. Because `gateway` holds no keys, it must ask
+`crypto` for every decrypt and every token signature — so a compromised
+`gateway` becomes a confused deputy that wields `crypto` as a decryption and
+signing oracle. "Holds no keys" bounds a `crypto` bug, not a `gateway` bug.
+The controls that make `crypto` able to *refuse* — purpose-bound, per-tenant,
+rate-limited, individually-audited key operations — are the real fix, tracked
+as T9 in the threat model and §12 in the backlog.
+
 | Language | Chosen for the one thing it alone provides |
 | --- | --- |
 | Rust | Deterministic key erasure. No garbage collector can copy a secret and leave the original behind. |
 | Go | Deadline propagation via `context`, cheap concurrency, mature OIDC and TLS libraries. |
 | Python | The ML ecosystem — and nothing else. |
+
+The control plane is Go for the same reason, applied in reverse: `api` writes
+tenant policy — real authority — and Python's only justification is ML. So
+Python appears in exactly one container, and the policy-writing service shares
+the gateway's small, already-audited dependency tree instead of tripling the
+largest one.
 
 ⚠️ The vault sits **furthest** from the internet, not closest. If Rust faced the
 public edge, every HTTP parsing bug would be a bug in the process holding the
@@ -178,6 +193,26 @@ release builds — set `overflow-checks = true` for the crypto crate; and
 `build.rs` executes arbitrary code at compile time, so a poisoned crate runs on
 CI before any binary ships.
 
+### Cryptographic provider
+
+Primitives sit behind a `CryptoProvider` trait, so the backend is a deployment
+choice rather than a code change.
+
+| Backend | Used by | FIPS 140-3 |
+| --- | --- | --- |
+| RustCrypto / `ring` | Development and non-regulated deployments | ❌ Not validated |
+| `aws-lc-rs` in FIPS mode | `regulated` profile | ✅ Validated |
+| PKCS#11 offload to a customer HSM | `regulated`, customer key custody | ✅ Inherited from the device |
+
+⚠️ This abstraction has to exist before the first crypto call site is written.
+US financial buyers require validated modules, and no pure-Rust library is
+validated or pursuing validation. Adding FIPS later means touching every call
+site in the service that holds the keys — the change nobody wants to review
+under a deadline. Detail in [docs/key-custody.md](docs/key-custody.md).
+
+⚠️ A validated module also *removes* algorithms. Ed25519 is absent from some
+FIPS builds, so ES256 is the safe default for passkey verification.
+
 ---
 
 ## Deployment
@@ -201,6 +236,22 @@ Exporting models to ONNX takes the Python image from roughly 2 GB to 200 MB.
 That is not only a speed decision — it removes most of the packages that would
 otherwise need auditing.
 
+### Ingress
+
+The public door is an adapter. Cloudflare Tunnel is one implementation of it,
+not the architecture.
+
+| Adapter | For |
+| --- | --- |
+| Cloudflare Tunnel | SaaS and self-hosted deployments with no inbound firewall holes |
+| Customer load balancer — F5, NGINX, Envoy | Deployments that terminate their own TLS |
+| Cloud private link | Customer-cloud deployments with no public route at all |
+
+⚠️ A mandatory third-party SaaS in the authentication path fails architecture
+review at any bank: it is an unapproved fourth party, a concentration risk, and
+it terminates TLS. The property worth keeping is *one public door with no
+inbound firewall holes* — not one particular vendor's tunnel.
+
 ### Networks
 
 Three networks, not one. The Guard and the Thinker cannot reach each other —
@@ -209,7 +260,7 @@ keys.
 
 | Network | Members |
 | --- | --- |
-| `edge` | Tunnel + `gateway` |
+| `edge` | Ingress adapter + `gateway` |
 | `net-a` | `gateway` + `crypto` |
 | `net-b` | `gateway` + `ai` |
 
@@ -240,12 +291,22 @@ way to check the services still agree.
 
 ```text
 proto/      the wire contract, source of truth
-gateway/    Go
-crypto/     Rust
-ai/         Python
+gateway/    Go — public door, tenant boundary, OIDC, sessions
+crypto/     Rust — keys, passkey verification, envelope encryption
+ai/         Python — advisory risk scoring
+api/        Go — control plane: tenants, policy, admin
+worker/     Go — webhooks, audit export, batch jobs
+console/    Next.js — admin and self-service UI
+sdk/        client kits: web, iOS, Android, Flutter, React Native, server
 deploy/     compose files, network configuration
-docs/
+docs/       threat model, backlog, compliance, custody, mobile
 ```
+
+⚠️ Every directory exists and holds a README — the service's contract with the
+rest of the system: its job, what it holds, what it must never do, and its
+container hardening. **No code yet, by explicit decision: plan before code.**
+When building starts, the first code to land is `proto/` plus the CI guard
+below, so the schema rule is enforced from the very first commit of code.
 
 CI enforces two invariants:
 
@@ -266,9 +327,69 @@ thousands of combinations nobody tested — Ai-Auth ships named profiles.
 
 | Profile | Meaning |
 | --- | --- |
-| `strict` | Passkey or hardware key only. No phishable path anywhere, including recovery. |
-| `balanced` | **Default.** Passkey required for sensitive actions; social login permitted for ordinary use. |
+| `strict` | **Default.** Passkey or hardware key only. No phishable path anywhere, including recovery. |
+| `balanced` | Passkey required for sensitive actions; social login permitted for ordinary use. |
 | `legacy` | Social and email paths permitted everywhere. Migration only. |
+| `regulated` | `strict`, plus FAPI 2.0 enforcement, customer key custody, validated cryptography, and full audit export. For financial and regulated deployments. |
+
+### Why `strict` is the default
+
+Every user gets the security level a bank would demand, because the parts of
+that level which matter most cost nothing to give away.
+
+| Bank-grade **security** — free once written, on by default | Bank **compliance** — costs real money, `regulated` only |
+| --- | --- |
+| Phishing-resistant login, passkeys and hardware keys | FIPS 140-3 validated module |
+| No bearer credential anywhere — DPoP, DBSC | Customer-held HSM key custody |
+| Fail-closed on every failure path | SOC 2 and ISO 27001 attestations |
+| Key separation, no route from the ML service to the keys | DORA contracts, audit and inspection rights |
+| Short access tokens, one-time refresh tokens | WORM audit retention |
+| Recovery as strong as login | PSD2 dynamic linking for payments |
+| Full audit trail of every decision | Threat-led penetration testing |
+
+The left column is the entire reason for this architecture, and none of it gets
+cheaper by being weakened for a smaller deployment. So it is the default, and
+opting *down* is the deliberate act.
+
+⚠️ **The cost of this choice is real.** Under `strict` a user whose device
+cannot do WebAuthn cannot sign in, and no email link will rescue them. An
+operator who needs that must explicitly select `balanced` or `legacy` and accept
+the phishable path in writing. That is the intent: the weak door is a decision
+somebody made, never a default somebody inherited.
+
+⚠️ **`strict` makes second-credential enrolment mandatory, not a nudge.** A
+synced passkey (iCloud Keychain, Google Password Manager) does survive device
+loss — the user signs into their platform account on a new device and the
+passkey returns. But sync has a price and a boundary. The price: the account is
+now only as strong as the platform account's own recovery, which is why NIST
+caps synced passkeys at AAL2 — the weakest-path rule follows the chain into
+Apple's and Google's buildings. The boundary: device-bound passkeys and hardware
+keys never sync, platform accounts can themselves be lost, and passkeys do not
+cross ecosystems. So high-assurance actors — operators, staff, `regulated`
+deployments — must use non-synced credentials, and for them a single credential
+on a single lost device **is** a permanent lockout. Two credentials before the
+account becomes usable — see the P0 rows in
+[docs/hardening-backlog.md](docs/hardening-backlog.md) §2.
+
+`regulated` is not a stricter set of preferences. It turns on requirements that
+an auditor or a certification body checks, and it fails closed at startup if any
+of them cannot be satisfied.
+
+| Under `regulated` | Enforced |
+| --- | --- |
+| PAR, `iss` response parameter, exact redirect match, `S256` PKCE | FAPI 2.0 Security Profile |
+| Client auth by mTLS or `private_key_jwt` only | No client secrets in redirect flows |
+| Sender-constrained tokens, no bearer path anywhere | DPoP or mTLS-bound |
+| Validated cryptographic provider | FIPS backend or HSM offload |
+| Customer key custody | KEK in the customer's HSM; we cannot decrypt alone |
+| Ingress adapter without a third party | No fourth party in the auth path |
+| Append-only audit log with SIEM export | Retention and WORM export configured |
+| Telemetry egress | Off, allowlist only |
+
+⚠️ Startup refuses to run `regulated` on an unvalidated crypto backend, a
+vendor-held KEK, or a bearer-token configuration. A profile that silently
+degrades is worse than no profile — it produces a deployment that believes it is
+compliant. See [docs/compliance.md](docs/compliance.md).
 
 Two kinds of setting, and only one of them gets a switch:
 
@@ -278,9 +399,13 @@ Two kinds of setting, and only one of them gets a switch:
 | Safety rail — no legitimate reason to disable | Exact redirect URI match, PKCE required, reject `alg: none`, verify passkey origin | ❌ No |
 
 ⚠️ Most operators never change defaults, so the default profile is the real
-security level of the product. Flag names state the risk plainly —
-`allow_phishable_recovery: true`, never `easy_recovery: true`. Nobody enables
-the first by accident.
+security level of the product. That is precisely why the default is the
+strongest profile rather than the most convenient one — an operator who never
+opens the configuration file still ships a phishing-resistant deployment.
+
+Flag names state the risk plainly — `allow_phishable_recovery: true`, never
+`easy_recovery: true`. Nobody enables the first by accident, and every
+step-down is written to the audit log as an explicit downgrade event.
 
 The admin console reports the **effective** assurance level computed from the
 running configuration, because security is set by the weakest permitted path,
@@ -414,30 +539,39 @@ Every request re-evaluated. No implicit trust from network position.
 
 ## Authentication policy
 
-The table below is the `balanced` **default profile**, not a fixed rule.
+The table below is the `strict` **default profile**. Every actor gets a
+phishing-resistant path, and no actor has a weaker one available.
 
-| Actor | Default requirement | Phishable path? | Under `strict` |
+| Actor | Default requirement (`strict`) | Phishable path? | If an operator opts down to `balanced` |
 | --- | --- | --- | --- |
-| Operator setup | Facebook + Google + passkey | ❌ No — all three required | Unchanged |
-| Operator daily | Passkey, or both socials | ⚠️ Yes, via the social path | Passkey only |
-| Shopper | Facebook, passkey optional | ⚠️ Yes — the default path | Passkey required |
-| Staff | Console-managed, no self-signup | ⚠️ Factor not yet specified | Passkey required |
+| Operator setup | Two passkeys, or a passkey plus a hardware key | ❌ None | Facebook + Google + passkey |
+| Operator daily | Passkey or hardware key | ❌ None | Passkey, **or** both socials ⚠️ |
+| Shopper | Passkey or hardware key | ❌ None | Facebook, passkey optional ⚠️ |
+| Staff | Console-provisioned, passkey required at login | ❌ None | Console-provisioned, factor unspecified ⚠️ |
+| Recovery, all actors | Second enrolled credential | ❌ None | Email link ⚠️ |
 
-⚠️ Under `balanced` the social path is proxy-phishable (T1 Path A), so an
-operator's passkey does not raise their assurance level on its own — the weakest
-permitted path sets it. What carries the weight is the step-up requirement on
-sensitive actions: a stolen social session can read, but cannot change
-credentials, move money, or alter tenant settings. Set `profile: strict` to
-remove the weak paths entirely.
+⚠️ Social login is **not** an authenticator under `strict`. It may identify an
+account, never prove it. This is the whole point of the default: the weakest
+permitted path sets the assurance level, so under `strict` there is no weaker
+path for it to be set by.
 
-⚠️ Recovery must move with the login policy. A `strict` login path beside
-email-link recovery is still an email-link system — see T3. Enrolling a second
-credential at signup is what makes strict recovery survivable, and matters more
-than any recovery flow design.
+⚠️ The right-hand column is what an operator gives up by opting down. Under
+`balanced` the social path is proxy-phishable (T1 Path A), so an operator's
+passkey stops raising their assurance level at all. What still carries weight
+there is the step-up requirement on sensitive actions: a stolen social session
+can read, but cannot change credentials, move money, or alter tenant settings.
+Every step-down is written to the audit log.
 
-⚠️ The `Staff` row describes provisioning, not authentication. It says who may
-obtain an account, not what proves their identity at login. That gap needs
-closing.
+⚠️ Recovery moves with the login policy automatically — a `strict` login path
+beside email-link recovery is still an email-link system, so `strict` forbids
+both (T3). Enrolling a second credential at signup is what makes that
+survivable, and it matters more than any recovery flow design. Startup refuses
+a configuration where recovery is weaker than login.
+
+⚠️ The `Staff` row previously described provisioning only — who may obtain an
+account, not what proves their identity at login. Under a `strict` default the
+gap closes by inheritance: staff authenticate with a passkey like everyone else,
+and console provisioning decides only who is allowed to enrol one.
 
 ---
 
@@ -448,3 +582,4 @@ closing.
 | Password-only login | Rejected by design |
 | SMS as primary factor | SIM-swap risk |
 | Directory sync (SCIM) v1 | Later, if demanded |
+| Multi-engine database support | Postgres only — one engine deeply hardened beats three shallowly |
