@@ -1,4 +1,4 @@
-# worker — background jobs (Python)
+# worker — background jobs (Go)
 
 Webhooks, audit export, and batch work. No inbound traffic at all — it
 consumes queues and emits outward.
@@ -6,10 +6,10 @@ consumes queues and emits outward.
 | Fact | Value |
 | --- | --- |
 | Plane | Control — never on the login path |
-| Language | Python |
+| Language | Go — decided 2026-08-14. Holds webhook signing secrets and orchestrates key-rotation jobs; shares the gateway's libraries. Queue is Postgres-backed — no extra broker dependency |
 | Holds keys | ❌ Webhook signing secrets only, per tenant |
 | Public | ❌ No inbound; egress to registered webhook endpoints |
-| Container | distroless-python · non-root · read-only rootfs · all capabilities dropped |
+| Container | distroless · non-root · read-only rootfs · all capabilities dropped |
 | Status | 📋 Planned — documentation only, no code yet |
 
 ## Job

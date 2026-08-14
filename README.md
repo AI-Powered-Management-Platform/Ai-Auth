@@ -25,7 +25,7 @@ configuration, not by forks.
 | Edge gateway | Go |
 | Crypto core | Rust |
 | Risk worker | Python |
-| Control plane | Python / FastAPI |
+| Control plane | Go |
 | Console | Next.js |
 | Store | Postgres + Redis |
 | Status | Design stage |
@@ -84,8 +84,8 @@ radius.
 
 | Service | Language | Job |
 | --- | --- | --- |
-| `api` | Python | Tenants, policy, admin |
-| `worker` | Python | Webhooks, audit export, batch jobs |
+| `api` | Go | Tenants, policy, admin |
+| `worker` | Go | Webhooks, audit export, batch jobs |
 | `console` | TypeScript | Admin and self-service UI |
 
 ### Integration — any website, any mobile app
@@ -119,6 +119,12 @@ directions; that is the point of the split.
 | Rust | Deterministic key erasure. No garbage collector can copy a secret and leave the original behind. |
 | Go | Deadline propagation via `context`, cheap concurrency, mature OIDC and TLS libraries. |
 | Python | The ML ecosystem — and nothing else. |
+
+The control plane is Go for the same reason, applied in reverse: `api` writes
+tenant policy — real authority — and Python's only justification is ML. So
+Python appears in exactly one container, and the policy-writing service shares
+the gateway's small, already-audited dependency tree instead of tripling the
+largest one.
 
 ⚠️ The vault sits **furthest** from the internet, not closest. If Rust faced the
 public edge, every HTTP parsing bug would be a bug in the process holding the
@@ -278,8 +284,8 @@ proto/      the wire contract, source of truth
 gateway/    Go — public door, tenant boundary, OIDC, sessions
 crypto/     Rust — keys, passkey verification, envelope encryption
 ai/         Python — advisory risk scoring
-api/        Python — control plane: tenants, policy, admin
-worker/     Python — webhooks, audit export, batch jobs
+api/        Go — control plane: tenants, policy, admin
+worker/     Go — webhooks, audit export, batch jobs
 console/    Next.js — admin and self-service UI
 sdk/        client kits: web, iOS, Android, Flutter, React Native, server
 deploy/     compose files, network configuration

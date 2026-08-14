@@ -1,4 +1,4 @@
-# api — control plane (Python / FastAPI)
+# api — control plane (Go)
 
 Tenants, policy, and administration. Deliberately **off the login path**: this
 service can be down and every login still works.
@@ -6,10 +6,10 @@ service can be down and every login still works.
 | Fact | Value |
 | --- | --- |
 | Plane | Control — never on the login path |
-| Language | Python / FastAPI |
+| Language | Go — decided 2026-08-14. This service writes tenant policy, which is real authority; it does not live in the most-compromisable language, and it reuses the gateway's mTLS, gRPC, tenant, and audit libraries |
 | Holds keys | ❌ Never |
 | Public | ❌ Admin traffic enters through the gateway |
-| Container | distroless-python · non-root · read-only rootfs · all capabilities dropped |
+| Container | distroless · non-root · read-only rootfs · all capabilities dropped |
 | Status | 📋 Planned — documentation only, no code yet |
 
 ## Job

@@ -7,7 +7,7 @@ asymmetry is the design.
 | Fact | Value |
 | --- | --- |
 | Plane | Data — on the login path, advisory only |
-| Language | Python — the ML ecosystem, and nothing else |
+| Language | Python — the ML ecosystem, and nothing else. The **only** Python container in the system, by decision |
 | Holds keys | ❌ Never |
 | Holds state | ⚠️ Behavioural baselines only |
 | Public | ❌ Never |
