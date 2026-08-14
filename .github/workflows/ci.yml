@@ -1,0 +1,35 @@
+name: ci
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  guard:
+    name: schema guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: RiskAssessment must never authorise
+        run: python3 scripts/check_risk_schema.py
+
+  proto:
+    name: proto lint + breaking
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+      - name: buf lint
+        run: buf lint
+      - name: buf breaking (against merge base)
+        if: github.event_name == 'pull_request'
+        run: |
+          if git ls-tree -r "origin/${{ github.base_ref }}" --name-only | grep -q '^proto/.*\.proto$'; then
+            buf breaking --against ".git#ref=origin/${{ github.base_ref }}"
+          else
+            echo "base branch has no proto files yet — skipping breaking check"
+          fi

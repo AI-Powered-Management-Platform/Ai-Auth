@@ -1,0 +1,44 @@
+// The Thinker's entire authority: a score and an explanation.
+//
+// This message MUST NOT contain any field that authorises. CI fails the build
+// if `allow`, `deny`, `decision`, or a variant appears here — see
+// scripts/check_risk_schema.py, docs/threat-model.md T8/T14, and the README
+// security model. The rule is enforced by the build, not by memory.
+
+syntax = "proto3";
+
+package aiauth.risk.v1;
+
+message RiskAssessment {
+  // 0.0 (benign) .. 1.0 (hostile). Advisory only.
+  double score = 1;
+
+  Band band = 2;
+
+  // Every score is explainable — each contributing signal is named.
+  repeated Reason reasons = 3;
+
+  // Which model produced this score. Stored with every audit record.
+  string model_version = 4;
+
+  // Set by the Thinker at scoring time; the gateway records its own clock too.
+  uint64 assessed_at_unix_ms = 5;
+
+  enum Band {
+    BAND_UNSPECIFIED = 0;
+    LOW = 1;
+    MEDIUM = 2;
+    // Also the fail-closed value the gateway assumes when the Thinker is
+    // unreachable or slow. Degradation is always toward strictness.
+    HIGH = 3;
+  }
+
+  message Reason {
+    // Machine-readable, e.g. "impossible_travel", "new_device".
+    string code = 1;
+    // Human-readable, written to the audit trail.
+    string detail = 2;
+    // Contribution to the score, for explainability.
+    double weight = 3;
+  }
+}
