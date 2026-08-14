@@ -27,7 +27,7 @@ configuration, not by forks.
 | Risk worker | Python |
 | Control plane | Go |
 | Console | Next.js |
-| Store | Postgres + Redis |
+| Store | Postgres + Redis — [one of each, nothing else](docs/data-layer.md) |
 | Status | Design stage |
 
 ⚠️ Security-first rule: never weaken auth for convenience. The passkey
@@ -43,6 +43,7 @@ fast-path is the UX answer, not a lowered bar.
 | [docs/trust-package.md](docs/trust-package.md) | Evidence a regulated buyer asks for |
 | [docs/mobile-integration.md](docs/mobile-integration.md) | iOS, Android, Flutter, React Native — client-side security |
 | [docs/development-lifecycle.md](docs/development-lifecycle.md) | How code gets built — agents propose, humans decide, CI enforces |
+| [docs/data-layer.md](docs/data-layer.md) | One Postgres + one Redis — schemas, roles, tenancy, residency |
 
 ⚠️ Read T1 first. Passkeys do not stop session theft after login.
 
@@ -572,3 +573,4 @@ and console provisioning decides only who is allowed to enrol one.
 | Password-only login | Rejected by design |
 | SMS as primary factor | SIM-swap risk |
 | Directory sync (SCIM) v1 | Later, if demanded |
+| Multi-engine database support | Postgres only — one engine deeply hardened beats three shallowly |

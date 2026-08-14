@@ -9,7 +9,7 @@ already validated.
 | Plane | Data — on the login path |
 | Language | Rust — deterministic key erasure; no garbage collector copies a secret and leaves the original behind |
 | Holds keys | ✅ All of them |
-| Holds state | ❌ None |
+| Holds state | ❌ None — no database credentials exist for this service |
 | Public | ❌ Never |
 | Networks | `net-a` only — no route to `ai` exists |
 | Container | scratch · non-root · read-only rootfs · all capabilities dropped · egress to KMS only |
