@@ -120,7 +120,7 @@ endpoint, and neither substitutes for the other.
 
 ## 5. Device integrity and risk telemetry
 
-The mobile app is a sensor for the Python worker. Signals stream to the
+The mobile app is a sensor for the Thinker (the `ai` service). Signals stream to the
 gateway, which forwards them to the Thinker — whose score remains advisory,
 as everywhere else in the system.
 

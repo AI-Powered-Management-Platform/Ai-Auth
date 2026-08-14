@@ -63,12 +63,14 @@ cryptographic modules. Most of the Rust ecosystem cannot supply one.
 | OpenSSL 3.x FIPS provider via bindings | ✅ | Heavier dependency, wider algorithm set |
 | **PKCS#11 offload to an HSM** | ✅ | Validation is inherited from the device |
 
-Go and Python matter too — the gateway terminates TLS and the control plane
-handles secrets:
+The other services matter too — the gateway terminates TLS, and the Go control
+plane signs webhooks and moves secrets:
 
 | Service | Path to validated crypto |
 | --- | --- |
 | `gateway` (Go) | Go's native FIPS 140-3 mode, or a BoringCrypto build |
+| `api` (Go) | Same Go path; delegates row encryption to `crypto` rather than holding keys |
+| `worker` (Go) | Same Go path — webhook HMAC signing uses the validated module |
 | `crypto` (Rust) | `aws-lc-rs` FIPS provider, or PKCS#11 offload |
 | `ai` (Python) | Not in the crypto path by design — keep it that way |
 
