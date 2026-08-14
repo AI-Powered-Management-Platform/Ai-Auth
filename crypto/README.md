@@ -8,12 +8,27 @@ already validated.
 | --- | --- |
 | Plane | Data — on the login path |
 | Language | Rust — deterministic key erasure; no garbage collector copies a secret and leaves the original behind |
-| Holds keys | ✅ All of them |
+| Holds keys | ✅ In memory, during use only — nothing at rest. The KEK lives in KMS/HSM; DEKs rest in Postgres **wrapped**; a restart starts clean |
 | Holds state | ❌ None — no database credentials exist for this service |
 | Public | ❌ Never |
 | Networks | `net-a` only — no route to `ai` exists |
 | Container | scratch · non-root · read-only rootfs · all capabilities dropped · egress to KMS only |
 | Status | 📋 Planned — documentation only, no code yet |
+
+## Where key material actually lives
+
+The vault is a worker, not a warehouse — it stores no key anywhere.
+
+| Key | At rest | In use |
+| --- | --- | --- |
+| KEK | KMS / HSM — outside the system, hardware-held | Never leaves the HSM under HYOK; otherwise cached in `mlock`ed RAM |
+| Per-row DEKs | Postgres, wrapped by the KEK — ciphertext the gateway ferries but cannot open | Unwrapped in RAM for milliseconds, zeroized on drop |
+| Passkey public keys | Postgres, plain — public by definition | Verified on request |
+
+Stealing this container's disk yields nothing: `scratch` base, read-only,
+stateless. Stealing Postgres yields wrapped keys — noise without the KEK.
+The two halves only meet in this process's memory, for the life of one
+request. Full hierarchy: [key custody](../docs/key-custody.md) §4.
 
 ## Job
 
