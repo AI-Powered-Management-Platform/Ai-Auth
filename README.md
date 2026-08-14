@@ -3,8 +3,9 @@
 AI-assisted identity provider. Passkey-first authentication, OIDC provider,
 multi-tenant session control, and risk scoring on every login.
 
-> **Status: design stage.** No code has been written yet. This repository is the
-> architecture, the threat model, and the compliance map.
+> **Status: design complete, build starting.** The architecture, threat model,
+> and compliance map are done; the first code — the wire contract and its CI
+> guard — landed 2026-08-14. The services themselves are not yet built.
 
 > **The risk model cannot authorise.** It emits an advisory score and nothing
 > else. Authorisation is decided by the Go gateway from a cryptographic verdict
@@ -304,9 +305,10 @@ docs/       threat model, backlog, compliance, custody, mobile
 
 ⚠️ Every directory exists and holds a README — the service's contract with the
 rest of the system: its job, what it holds, what it must never do, and its
-container hardening. **No code yet, by explicit decision: plan before code.**
-When building starts, the first code to land is `proto/` plus the CI guard
-below, so the schema rule is enforced from the very first commit of code.
+container hardening. The first code landed exactly as the plan required:
+`proto/risk.proto` plus the CI guard, so the schema rule below has been
+enforced since before any service existed. The build order from here is
+[the v1 cut](docs/hardening-backlog.md).
 
 CI enforces two invariants:
 

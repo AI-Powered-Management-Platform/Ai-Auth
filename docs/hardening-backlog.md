@@ -18,6 +18,29 @@ security issues through [SECURITY.md](../SECURITY.md).
 
 ---
 
+## 0. The v1 cut — what gets built first
+
+Added 2026-08-14 to close the scope risk: the catalogue is large, the team is
+small, and depth beats breadth. v1 is the smallest slice that is honestly
+usable and honestly `strict`.
+
+| In v1 | Out of v1 (deferred, not deleted) |
+| --- | --- |
+| `gateway` + `crypto` + Postgres/Redis | `console` beyond a minimal admin page |
+| OIDC code flow + PKCE, passkey login, `strict` profile | Federation (SAML, upstream OIDC), social connectors |
+| Two-credential enrolment at signup (T15) | Email OTP / magic links (`legacy` only) |
+| Refresh rotation + DPoP + revocation checked every request (T11) | CAEP/SSF transmit, agent identity (RFC 8693) |
+| Purpose-bound, rate-limited crypto calls (T9/T10) | HYOK/HSM adapters beyond the provider trait |
+| Append-only audit log | SIEM/WORM export pipelines |
+| `ai` as a rules-only stub — velocity + new-device, no ML | Trained models, ONNX pipeline, summarizer |
+| Web SDK docs (plain OIDC works day one) | Native mobile SDKs |
+
+⚠️ The `ai` stub still speaks `RiskAssessment` over the real contract, so the
+schema guard and fail-closed path are exercised from the first day — the ML
+inside arrives later without touching any interface.
+
+---
+
 ## 1. The gap passkeys do not close
 
 Passkeys defeat phishing at login. They do nothing after login. Adversary-in-

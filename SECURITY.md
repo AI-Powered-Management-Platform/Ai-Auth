@@ -20,12 +20,13 @@ of code, not bolted on after the first report arrives in a public issue.
 
 | Channel | Use for | How |
 | --- | --- | --- |
-| GitHub private vulnerability reporting | Everything, preferred | Security tab → *Report a vulnerability* |
-| Encrypted email | If you cannot use GitHub | `TODO: security@<domain>` — PGP key at `TODO` |
+| GitHub private vulnerability reporting | Everything, preferred | Security tab → *Report a vulnerability* — **enabled 2026-08-14** |
+| Email fallback | Only if you cannot use GitHub | `hsopheak85@gmail.com` — interim personal address until a project domain exists |
 
-⚠️ Both rows above need filling in before this repository takes real users.
-Private vulnerability reporting must be enabled in repository settings, and the
-mailbox must exist and be monitored.
+⚠️ Interim setup, honestly stated: the email fallback is a personal address
+and no PGP key is published yet. For anything sensitive, use the GitHub
+channel — it is private end-to-end. A dedicated `security@` mailbox and a
+published key replace this row before the first release.
 
 ### What to include
 
