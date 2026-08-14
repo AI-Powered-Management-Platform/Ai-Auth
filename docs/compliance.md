@@ -214,21 +214,71 @@ half.
 
 ---
 
-## 9. Asia-Pacific
+## 9. Global jurisdiction map
 
-Named so they are not forgotten. Each needs local verification before any claim.
+The target market is **global** — decided 2026-08-14. One product, one security
+level for every user on the planet; regional law is handled by configuration
+and deployment region, never by forking the product. Each row needs local
+verification before any customer-facing claim.
+
+### 9.1 Data protection and privacy
+
+An identity provider is a personal-data processor everywhere it operates. The
+good news: the same three designed controls answer most of these at once —
+per-subject cryptographic erasure, application-layer encryption with blind
+indexing, and region-pinned storage.
+
+| Jurisdiction | Instrument | The demand that bites an IdP |
+| --- | --- | --- |
+| EU / EEA | GDPR | Erasure → cryptographic shredding; lawful basis; DPA; EU residency option |
+| UK | UK GDPR + DPA 2018 | Same shape as GDPR, separate adequacy reality |
+| Brazil | LGPD | GDPR-like; national DPO expectations |
+| Canada | PIPEDA, Québec Law 25 | Law 25 adds residency and privacy-by-default duties |
+| US | State patchwork — CCPA/CPRA and successors | Deletion and sale-opt-out rights; no single federal law |
+| Japan | APPI | Cross-border transfer consent |
+| South Korea | PIPA | Strict consent, heavy breach penalties |
+| India | DPDP Act 2023 | Consent manager framework, data-fiduciary duties |
+| Singapore / Thailand | PDPA (each) | Consent and breach notification |
+| Indonesia | PDP Law | Residency pressure for public-sector work |
+| South Africa | POPIA | Information-officer registration |
+
+### 9.2 Financial and sector regulators
 
 | Jurisdiction | Instrument | Notes |
 | --- | --- | --- |
-| Singapore | MAS TRM Guidelines; Notice on Cyber Hygiene | Requires MFA for administrative accounts — directly in our path |
+| EU | PSD2 SCA, DORA, eIDAS 2.0 | §4 and §5 above; eIDAS 2.0 EUDI wallet interop is a P2 watch item |
+| UK | FCA Handbook, UK Open Banking | FAPI-based — the same certification pays twice |
+| Brazil | Open Finance Brasil | FAPI-based — pays a third time |
+| US | FFIEC guidance, SR 11-7, state regulators | §1 and §8 above |
+| Singapore | MAS TRM Guidelines; Notice on Cyber Hygiene | MFA required for administrative accounts — directly in our path |
 | Hong Kong | HKMA Supervisory Policy Manual, e-banking authentication | Two-factor expectations for high-risk transactions |
 | Malaysia | BNM RMiT | Prescriptive on cryptography and key management |
-| Australia | APRA CPS 234; CPS 230 operational risk | CPS 234 pushes information-security obligations onto service providers by contract |
+| Australia | APRA CPS 234; CPS 230 | Obligations flow to service providers by contract |
 | India | RBI directions on IT governance and outsourcing | Data localisation implications |
-| Cambodia | NBC technology and cyber-risk regulations | ⚠️ Specifics not verified here — confirm the current Prakas with local counsel |
+| UAE / Saudi Arabia | CBUAE, SAMA cyber frameworks | Residency and sovereign-cloud expectations |
+| Cambodia | NBC technology and cyber-risk regulations | ⚠️ Not verified here — confirm the current Prakas with local counsel |
 
-⚠️ This table is a starting list, not legal advice, and the region moves fast.
-Verify every row against the current instrument before it reaches a customer
+### 9.3 Data residency — the control that serves them all
+
+Multi-region row partitioning: each user row carries a home region, and the
+database routes and stores it there (the CockroachDB / Spanner locality model).
+One schema, one product — the row's location is data, not a deployment fork.
+
+| Deliverable | Status |
+| --- | --- |
+| Home-region column on every subject-scoped table | ⚠️ Named, not yet specified |
+| Region-pinned storage and backups | ⚠️ Named, not yet specified |
+| Per-region KMS/HSM roots — keys never cross a border either | ❌ Gap |
+| Residency surfaced in the admin console per tenant | ❌ Gap |
+
+⚠️ Global reach cuts against the `strict` default in one honest place: WebAuthn
+needs a capable device, and device penetration is uneven across the planet.
+The profile system is the answer — an operator serving low-end-device markets
+makes an explicit, logged decision to admit weaker paths for those users. The
+trade is made visible and per-tenant, never silently global.
+
+⚠️ These tables are a starting map, not legal advice. Verify every row against
+the current instrument, with local counsel, before it reaches a customer
 document.
 
 ---
@@ -249,6 +299,7 @@ Everything marked ❌ above, in build order.
 | 8 | Quantitative RTO, RPO, availability targets | DORA, every questionnaire | 📋 + design |
 | 9 | Dynamic linking for payment authentication | PSD2 SCA, PSP customers only | New feature |
 | 10 | FAL mapping for federation | NIST 800-63-4 completeness | Backlog §5 |
+| 11 | Per-region key roots and residency surfacing | Global privacy map, §9.3 | New design, DB layer |
 
 ---
 

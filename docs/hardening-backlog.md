@@ -219,6 +219,7 @@ Regulated buyers purchase the audit trail as much as the authentication.
 | P1 · PR | Model decision provenance | Score, model version, and inputs stored per decision |
 | P1 | SBOM per release | CycloneDX or SPDX |
 | P1 | Signed artifacts and build provenance | Sigstore/cosign, SLSA level 3 |
+| P0 | Secret scanning | Pre-commit hook (TruffleHog or gitleaks) plus GitHub push protection — no key or certificate ever enters history |
 | P2 | Reproducible builds | Strong differentiator on a `scratch` image |
 
 ---
