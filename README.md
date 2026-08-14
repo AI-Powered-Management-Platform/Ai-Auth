@@ -42,6 +42,7 @@ fast-path is the UX answer, not a lowered bar.
 | [docs/key-custody.md](docs/key-custody.md) | HSM, FIPS 140-3, key ceremony |
 | [docs/trust-package.md](docs/trust-package.md) | Evidence a regulated buyer asks for |
 | [docs/mobile-integration.md](docs/mobile-integration.md) | iOS, Android, Flutter, React Native — client-side security |
+| [docs/development-lifecycle.md](docs/development-lifecycle.md) | How code gets built — agents propose, humans decide, CI enforces |
 
 ⚠️ Read T1 first. Passkeys do not stop session theft after login.
 
