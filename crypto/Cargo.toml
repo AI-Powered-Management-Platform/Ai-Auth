@@ -13,6 +13,8 @@ prost = "0.14"
 tonic-prost = "0.14"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
 zeroize = "1"
+hmac = "0.12"
+sha2 = "0.10"
 
 # The crypto crate ships with overflow checks in release builds — integer
 # overflow wraps silently otherwise, and this is the one crate where that

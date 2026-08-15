@@ -2,10 +2,13 @@
 //! plaintext gRPC is not a supported mode, including local development.
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
 
 use aiauth_crypto::gen::aiauth::crypto::v1::crypto_service_server::CryptoServiceServer;
+use aiauth_crypto::provider::{CryptoProvider, KeyHandle};
+use aiauth_crypto::providers::software::SoftwareProvider;
 use aiauth_crypto::service::Guard;
 
 fn required_env(name: &str) -> String {
@@ -45,11 +48,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // mutual TLS, not optional TLS.
         .client_ca_root(Certificate::from_pem(ca));
 
-    println!("{{\"event\":\"guard_up\",\"addr\":\"{addr}\",\"mtls\":true}}");
+    // Development key material. The KEK-unwrap path replaces this; a
+    // `regulated` deployment must refuse a non-validated provider outright.
+    let index_key = KeyHandle::new("blind-index-v1");
+    let provider = SoftwareProvider::new().with_key(index_key.clone(), vec![0x5a; 32]);
+    let attestation = provider.attestation();
+    let guard = Guard::new(Arc::new(provider), index_key);
+
+    println!(
+        "{{\"event\":\"guard_up\",\"addr\":\"{addr}\",\"mtls\":true,\"provider\":\"{}\",\"fips\":{}}}",
+        attestation.module, attestation.fips
+    );
 
     Server::builder()
         .tls_config(tls)?
-        .add_service(CryptoServiceServer::new(Guard))
+        .add_service(CryptoServiceServer::new(guard))
         .serve_with_shutdown(addr, async {
             let _ = tokio::signal::ctrl_c().await;
             println!("{{\"event\":\"guard_shutdown\"}}");
