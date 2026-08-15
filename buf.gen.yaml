@@ -9,6 +9,14 @@ managed:
     - file_option: go_package_prefix
       value: github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/gen
 plugins:
+  # Rust: prost/tonic community plugins. Generated code is committed; no
+  # build.rs exists in the crypto crate — codegen happens here, reviewably,
+  # not at compile time (README, build.rs warning). TODO: pin these two once
+  # the registry version is confirmed; excluded from the drift gate until then.
+  - remote: buf.build/community/neoeinstein-prost
+    out: crypto/src/gen
+  - remote: buf.build/community/neoeinstein-tonic
+    out: crypto/src/gen
   - remote: buf.build/protocolbuffers/go:v1.36.12
     out: gateway/gen
     opt: paths=source_relative

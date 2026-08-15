@@ -13,7 +13,7 @@ already validated.
 | Public | ❌ Never |
 | Networks | `net-a` only — no route to `ai` exists |
 | Container | scratch · non-root · read-only rootfs · all capabilities dropped · egress to KMS only |
-| Status | 🚧 v1 building — `SecretBuf` zero-on-drop primitive, zero dependencies; no serving surface yet |
+| Status | 🚧 v1 building — tonic mTLS server with the T9 purpose gate enforced and audited on every operation; cryptography itself still `UNIMPLEMENTED`, arriving behind the CryptoProvider trait |
 
 ## Where key material actually lives
 
