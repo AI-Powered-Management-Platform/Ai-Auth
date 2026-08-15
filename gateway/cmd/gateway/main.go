@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -14,7 +15,9 @@ import (
 	"time"
 
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/guard"
+	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/oidc"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/server"
+	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/tokens"
 )
 
 func envOr(name, fallback string) string {
@@ -54,9 +57,34 @@ func main() {
 		check = g.Probe
 	}
 
+	// OIDC wiring: a signer is required for the endpoints to exist at all.
+	// v1 generates a development key at boot; production keys come from the
+	// KMS/HSM path (docs/key-custody.md §4) and never live in this process.
+	cfg := server.Config{Version: version, Guard: check, LoginURL: "/login"}
+	if issuer := os.Getenv("OIDC_ISSUER"); issuer != "" {
+		key, err := tokens.GenerateKey()
+		if err != nil {
+			log.Error("signing key", "err", err)
+			os.Exit(1)
+		}
+		signer, err := tokens.NewSigner(issuer, "dev-1", key)
+		if err != nil {
+			log.Error("signer", "err", err)
+			os.Exit(1)
+		}
+		cfg.Issuer = issuer
+		cfg.Audience = envOr("OIDC_AUDIENCE", "api")
+		cfg.Signer = signer
+		cfg.SigningKeys = map[string]*ecdsa.PublicKey{"dev-1": &key.PublicKey}
+		// No clients are registered yet, so /authorize refuses every
+		// client_id. The registry arrives with the control plane.
+		cfg.Clients = func(string) (oidc.Client, bool) { return oidc.Client{}, false }
+		log.Warn("oidc enabled with a development signing key and no registered clients")
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           server.New(version, check),
+		Handler:           server.New(cfg),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

@@ -13,7 +13,7 @@ read none of the data it stores.
 | Public | ✅ The only one |
 | Networks | `edge`, `net-a` → crypto, `net-b` → ai |
 | Container | distroless · non-root · read-only rootfs · all capabilities dropped · egress to tunnel only |
-| Status | 🚧 v1 building — health endpoints + mTLS Guard client (TLS 1.3, deadline on every call, refuses to exist without certs) with typed per-purpose call wrappers; no auth surface yet |
+| Status | 🚧 v1 building — OIDC discovery, JWKS, /authorize and /token; health endpoints; mTLS Guard client (TLS 1.3, deadline on every call, refuses to exist without certs) with typed per-purpose call wrappers; no auth surface yet |
 
 ## Job
 
