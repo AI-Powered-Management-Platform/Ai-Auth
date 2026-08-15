@@ -13,7 +13,7 @@ already validated.
 | Public | ❌ Never |
 | Networks | `net-a` only — no route to `ai` exists |
 | Container | scratch · non-root · read-only rootfs · all capabilities dropped · egress to KMS only |
-| Status | 🚧 v1 building — tonic mTLS server with the T9 purpose gate enforced and audited on every operation; cryptography itself still `UNIMPLEMENTED`, arriving behind the CryptoProvider trait |
+| Status | 🚧 v1 building — tonic mTLS server, T9 gate enforced and audited, `CryptoProvider` trait in place with tenant-bound blind indexing live; envelope encryption and passkey verification still `UNIMPLEMENTED` |
 
 ## Where key material actually lives
 

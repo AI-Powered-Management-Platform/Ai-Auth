@@ -6,6 +6,8 @@
 
 pub mod context;
 pub mod gen;
+pub mod provider;
+pub mod providers;
 pub mod service;
 
 use zeroize::Zeroizing;
