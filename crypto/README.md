@@ -13,6 +13,7 @@ already validated.
 | Public | ❌ Never |
 | Networks | `net-a` only — no route to `ai` exists |
 | Container | scratch · non-root · read-only rootfs · all capabilities dropped · egress to KMS only |
+| Profile | Checked at startup — `regulated` refuses a non-validated provider; an unknown profile name refuses rather than falling back |
 | Status | 🚧 v1 building — tonic mTLS server, T9 gate enforced and audited, per-tenant and global rate ceilings, `CryptoProvider` trait in place; tenant-bound blind indexing and envelope encryption live (AES-256-GCM, tenant as AAD); and passkey verification (ES256, full check set) all live |
 
 ## Where key material actually lives

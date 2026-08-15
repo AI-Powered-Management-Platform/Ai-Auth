@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
 
 use aiauth_crypto::gen::aiauth::crypto::v1::crypto_service_server::CryptoServiceServer;
+use aiauth_crypto::profile::{self, Profile};
 use aiauth_crypto::provider::{CryptoProvider, KeyHandle};
 use aiauth_crypto::providers::software::SoftwareProvider;
 use aiauth_crypto::service::Guard;
@@ -56,11 +57,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_key(index_key.clone(), vec![0x5a; 32])
         .with_key(kek.clone(), vec![0xa5; 32]);
     let attestation = provider.attestation();
+
+    // Profile preconditions, checked before the server binds. A deployment
+    // that cannot satisfy its profile does not start — degrading silently
+    // would produce a service that believes it is compliant.
+    let profile = match std::env::var("AIAUTH_PROFILE") {
+        Ok(v) => match Profile::parse(&v) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("{{\"fatal\":\"invalid profile\",\"detail\":\"{e}\"}}");
+                std::process::exit(1);
+            }
+        },
+        Err(_) => Profile::default(),
+    };
+    if let Err(refusal) = profile::check(profile, &attestation) {
+        eprintln!("{{\"fatal\":\"profile precondition unmet\",\"detail\":\"{refusal}\"}}");
+        std::process::exit(1);
+    }
+
     let guard = Guard::new(Arc::new(provider), index_key, kek);
 
     println!(
-        "{{\"event\":\"guard_up\",\"addr\":\"{addr}\",\"mtls\":true,\"provider\":\"{}\",\"fips\":{}}}",
-        attestation.module, attestation.fips
+        "{{\"event\":\"guard_up\",\"addr\":\"{addr}\",\"mtls\":true,\"profile\":\"{}\",\"provider\":\"{}\",\"fips\":{}}}",
+        profile.as_str(), attestation.module, attestation.fips
     );
 
     Server::builder()
