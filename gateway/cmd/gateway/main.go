@@ -76,10 +76,22 @@ func main() {
 		cfg.Audience = envOr("OIDC_AUDIENCE", "api")
 		cfg.Signer = signer
 		cfg.SigningKeys = map[string]*ecdsa.PublicKey{"dev-1": &key.PublicKey}
-		// No clients are registered yet, so /authorize refuses every
-		// client_id. The registry arrives with the control plane.
-		cfg.Clients = func(string) (oidc.Client, bool) { return oidc.Client{}, false }
-		log.Warn("oidc enabled with a development signing key and no registered clients")
+		registry := oidc.NewRegistry()
+		// Development seeding only. Real registration arrives with the
+		// control plane; an empty registry refuses every client_id, which is
+		// the correct posture for a server with no tenants yet.
+		if dev := os.Getenv("OIDC_DEV_CLIENT_REDIRECT"); dev != "" {
+			if err := registry.Register(oidc.Client{
+				ID: envOr("OIDC_DEV_CLIENT_ID", "dev"), RedirectURIs: []string{dev},
+			}); err != nil {
+				log.Error("dev client registration", "err", err)
+				os.Exit(1)
+			}
+			log.Warn("registered a development client", "redirect", dev)
+		}
+		cfg.Clients = registry.Lookup
+		log.Warn("oidc enabled with a development signing key",
+			"registered_clients", registry.Len())
 	}
 
 	srv := &http.Server{
