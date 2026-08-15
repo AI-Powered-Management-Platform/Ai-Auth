@@ -16,6 +16,8 @@ services:
       GUARD_CERT_FILE: /certs/gateway.pem
       GUARD_KEY_FILE: /certs/gateway-key.pem
       GUARD_SERVER_NAME: crypto
+      OIDC_ISSUER: "http://127.0.0.1:8080"
+      OIDC_AUDIENCE: "api"
     volumes:
       - ./dev-certs:/certs:ro
     ports:
