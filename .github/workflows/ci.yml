@@ -25,6 +25,11 @@ jobs:
           setup_only: true
       - name: buf lint
         run: buf lint
+      - name: generated code is current (drift gate)
+        run: |
+          buf generate
+          git diff --exit-code -- gateway/gen || {
+            echo "::error::generated code drifted from the contract — run 'buf generate' and commit"; exit 1; }
       - name: buf breaking (against merge base)
         if: github.event_name == 'pull_request'
         run: |
