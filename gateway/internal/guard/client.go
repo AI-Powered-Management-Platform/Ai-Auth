@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 
 	cryptov1 "github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/gen/aiauth/crypto/v1"
 )
@@ -83,3 +85,25 @@ func (c *Client) VerifyAssertion(ctx context.Context, req *cryptov1.VerifyAssert
 }
 
 func (c *Client) Close() error { return c.conn.Close() }
+
+// Probe checks channel health, not business success. An empty VerifyAssertion
+// is REJECTED by the Guard's T9 gate — and that rejection arriving as a
+// proper gRPC status proves the mTLS channel end to end. Transport failure
+// (unreachable, handshake, deadline) is the only unhealthy answer.
+func (c *Client) Probe(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, DefaultCallTimeout)
+	defer cancel()
+	// WaitForReady rides out cold starts: if the Guard is still booting or
+	// DNS has not settled, the probe waits for its deadline instead of
+	// failing instantly on a transient resolver state.
+	_, err := c.svc.VerifyAssertion(ctx, &cryptov1.VerifyAssertionRequest{}, grpc.WaitForReady(true))
+	if err == nil {
+		return nil // unexpected at v1, but an answer is an answer
+	}
+	switch status.Code(err) {
+	case codes.InvalidArgument, codes.PermissionDenied, codes.Unimplemented:
+		return nil // the Guard answered: channel healthy, gate working
+	default:
+		return fmt.Errorf("guard unreachable: %w", err)
+	}
+}

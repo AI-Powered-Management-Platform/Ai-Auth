@@ -13,8 +13,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/guard"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/server"
 )
+
+func envOr(name, fallback string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return fallback
+}
 
 // version is stamped by the build; "dev" outside CI.
 var version = "dev"
@@ -27,9 +35,28 @@ func main() {
 		addr = ":8080"
 	}
 
+	// Guard wiring: all-or-nothing. A partially configured Guard is a
+	// misconfiguration, and misconfiguration fails closed at startup.
+	var check server.GuardCheck
+	if os.Getenv("GUARD_ADDR") != "" {
+		g, err := guard.New(guard.Config{
+			Addr:       os.Getenv("GUARD_ADDR"),
+			CAFile:     os.Getenv("GUARD_CA_FILE"),
+			CertFile:   os.Getenv("GUARD_CERT_FILE"),
+			KeyFile:    os.Getenv("GUARD_KEY_FILE"),
+			ServerName: envOr("GUARD_SERVER_NAME", "crypto"),
+		})
+		if err != nil {
+			log.Error("guard config", "err", err)
+			os.Exit(1)
+		}
+		defer g.Close()
+		check = g.Probe
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           server.New(version),
+		Handler:           server.New(version, check),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

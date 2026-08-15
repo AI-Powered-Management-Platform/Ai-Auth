@@ -265,6 +265,7 @@ keys.
 | `edge` | Ingress adapter + `gateway` |
 | `net-a` | `gateway` + `crypto` |
 | `net-b` | `gateway` + `ai` |
+| `net-data` | `gateway` + Postgres + Redis — `crypto` has no route to the stores |
 
 Guard and Thinker are `expose`d, never `ports`-published. Certificates are
 mounted at runtime, never baked into an image.
