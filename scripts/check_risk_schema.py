@@ -9,30 +9,30 @@ import re
 import sys
 from pathlib import Path
 
-PROTO = Path(__file__).resolve().parent.parent / "proto" / "aiauth" / "risk" / "v1" / "risk.proto"
+RISK_DIR = Path(__file__).resolve().parent.parent / "proto" / "aiauth" / "risk"
 FORBIDDEN = ("allow", "deny", "decision", "permit", "authorize", "authorise", "grant", "verdict")
 
 def main() -> int:
     # T14: the guard verifies its subject exists — a deleted contract must
     # fail loudly, not pass because there was nothing to check.
-    if not PROTO.is_file():
-        print(f"GUARD FAIL: {PROTO} is missing — the contract the guard protects is gone.")
+    protos = sorted(RISK_DIR.rglob("*.proto")) if RISK_DIR.is_dir() else []
+    if not protos:
+        print(f"GUARD FAIL: no .proto files under {RISK_DIR} — the contract the guard protects is gone.")
         return 1
-    text = PROTO.read_text(encoding="utf-8")
+    text = chr(10).join(f.read_text(encoding="utf-8") for f in protos)
     text = re.sub(r"//[^\n]*", "", text)  # strip comments
 
-    names = []
-    # field declarations:  [repeated|optional] <type> <name> = N;
-    names += re.findall(r"^\s*(?:repeated\s+|optional\s+)?[\w.<>,\s]+?\s(\w+)\s*=\s*\d+\s*;", text, re.M)
-    # enum values:  NAME = N;
-    names += re.findall(r"^\s*([A-Z][A-Z0-9_]*)\s*=\s*\d+\s*;", text, re.M)
+    # Any identifier assigned a field/enum number — `name = N;` — regardless of
+    # line layout. Anchoring to line starts let a single-line
+    # `message Sneaky { bool allow_login = 1; }` slip past; this form does not.
+    names = re.findall(r"(\w+)\s*=\s*\d+\s*;", text)
 
     bad = [n for n in names if any(tok in n.lower() for tok in FORBIDDEN)]
     if bad:
         print("GUARD FAIL: authorising field(s) in RiskAssessment:", ", ".join(sorted(set(bad))))
         print("The risk model is advisory. It must never authorise. See docs/threat-model.md T8.")
         return 1
-    print(f"guard ok: {len(set(names))} identifiers checked, none grant authority")
+    print(f"guard ok: {len(protos)} files, {len(set(names))} identifiers checked, none grant authority")
     return 0
 
 if __name__ == "__main__":

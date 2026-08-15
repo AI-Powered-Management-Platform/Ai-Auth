@@ -5,7 +5,8 @@ multi-tenant session control, and risk scoring on every login.
 
 > **Status: design complete, build starting.** The architecture, threat model,
 > and compliance map are done; the first code — the wire contract and its CI
-> guard — landed 2026-08-14. The services themselves are not yet built.
+> guard — landed 2026-08-14; the gateway and crypto skeletons followed
+> 2026-08-15. Nothing serves authentication yet.
 
 > **The risk model cannot authorise.** It emits an advisory score and nothing
 > else. Authorisation is decided by the Go gateway from a cryptographic verdict
