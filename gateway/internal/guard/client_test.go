@@ -117,6 +117,13 @@ func newTestPKI(t *testing.T, dir string) *testPKI {
 // startGuard serves fakeGuard behind real mutual TLS on a random port.
 func startGuard(t *testing.T, p *testPKI) string {
 	t.Helper()
+	return startGuardWith(t, p, fakeGuard{})
+}
+
+// startGuardWith serves any implementation, so tests can record what the
+// gateway actually sent.
+func startGuardWith(t *testing.T, p *testPKI, impl cryptov1.CryptoServiceServer) string {
+	t.Helper()
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(p.caPEM)
 	creds := credentials.NewTLS(&tls.Config{
@@ -130,7 +137,7 @@ func startGuard(t *testing.T, p *testPKI) string {
 		t.Fatal(err)
 	}
 	srv := grpc.NewServer(grpc.Creds(creds))
-	cryptov1.RegisterCryptoServiceServer(srv, fakeGuard{})
+	cryptov1.RegisterCryptoServiceServer(srv, impl)
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
 	return lis.Addr().String()
