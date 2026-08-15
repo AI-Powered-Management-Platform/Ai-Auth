@@ -12,7 +12,11 @@ service RiskService {
   // Called only for attempts that already passed cryptographic verification —
   // authenticate before you compute. 50 ms budget; on timeout the gateway
   // assumes BAND_HIGH (fail closed).
-  rpc Score(ScoreRequest) returns (RiskAssessment);
+  rpc Score(ScoreRequest) returns (ScoreResponse);
+}
+
+message ScoreResponse {
+  RiskAssessment assessment = 1;
 }
 
 message ScoreRequest {
