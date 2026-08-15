@@ -25,3 +25,6 @@ Thumbs.db
 crypto/target/
 gateway/gateway
 gateway/gateway.exe
+
+# dev PKI — minted by scripts/dev-certs.sh, never committed
+deploy/dev-certs/

@@ -62,3 +62,13 @@ jobs:
           rustup component add clippy 2>/dev/null || true
           cargo clippy --locked -- -D warnings
           cargo test --locked
+
+  deploy:
+    name: compose + scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: compose file validates
+        run: docker compose -f deploy/compose.yaml config -q
+      - name: shellcheck
+        run: shellcheck scripts/*.sh

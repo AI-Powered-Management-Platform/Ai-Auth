@@ -1,0 +1,75 @@
+# Development composition. The hardening table in the root README is not
+# prose — it is this file. Certificates come from scripts/dev-certs.sh and
+# are MOUNTED, never baked into an image.
+name: aiauth
+
+services:
+  gateway:
+    build: ../gateway
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      GATEWAY_ADDR: ":8080"
+      GUARD_ADDR: "crypto:9090"
+      GUARD_CA_FILE: /certs/ca.pem
+      GUARD_CERT_FILE: /certs/gateway.pem
+      GUARD_KEY_FILE: /certs/gateway-key.pem
+      GUARD_SERVER_NAME: crypto
+    volumes:
+      - ./dev-certs:/certs:ro
+    ports:
+      - "127.0.0.1:8080:8080"   # dev only; production enters via the ingress adapter
+    networks: [edge, net-a, net-b, net-data]
+    depends_on: [crypto]
+
+  crypto:
+    build: ../crypto
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      CRYPTO_ADDR: "0.0.0.0:9090"
+      CRYPTO_CA_FILE: /certs/ca.pem
+      CRYPTO_CERT_FILE: /certs/crypto.pem
+      CRYPTO_KEY_FILE: /certs/crypto-key.pem
+    volumes:
+      - ./dev-certs:/certs:ro
+    # expose only — never ports. The Guard has no published door.
+    expose: ["9090"]
+    networks: [net-a]
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: aiauth
+      POSTGRES_PASSWORD: dev-only-not-a-secret
+      POSTGRES_DB: aiauth
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiauth -d aiauth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [net-data]
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/data]
+    # Redis holds nothing that matters (docs/data-layer.md): ephemeral by
+    # configuration as well as by policy — no persistence at all.
+    networks: [net-data]
+
+networks:
+  edge: {}                      # the only network with a route anywhere
+  net-a: { internal: true }     # gateway ↔ crypto. No internet, by structure.
+  net-b: { internal: true }     # gateway ↔ ai (service arrives later)
+  net-data: { internal: true }  # gateway ↔ postgres/redis. crypto has NO route here.
+
+volumes:
+  pgdata:
