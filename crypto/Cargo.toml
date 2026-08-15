@@ -3,6 +3,17 @@ name = "aiauth-crypto"
 version = "0.1.0"
 edition = "2021"
 
+# First dependency batch — a reviewed Tier-1 change (development lifecycle §3).
+# No build.rs exists in this crate: generated code is committed via buf, so
+# nothing executes at compile time beyond rustc (README, build.rs warning).
+# TLS backend is aws-lc — the FIPS 140-3 trajectory from docs/key-custody.md.
+[dependencies]
+tonic = { version = "0.14", features = ["router", "tls-aws-lc"] }
+prost = "0.14"
+tonic-prost = "0.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+zeroize = "1"
+
 # The crypto crate ships with overflow checks in release builds — integer
 # overflow wraps silently otherwise, and this is the one crate where that
 # must never happen (README, "Two Rust traps").

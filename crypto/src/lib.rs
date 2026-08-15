@@ -1,25 +1,24 @@
-//! The Guard's crate. v1 skeleton: the secret-handling primitive only.
-//!
-//! No dependencies yet, deliberately: the first `cargo add` is a reviewed,
-//! Tier-1 decision (docs/development-lifecycle.md §3). When the real
-//! dependency batch lands (`zeroize`, `subtle`, the CryptoProvider backends),
-//! `SecretBuf` switches to `zeroize`'s volatile, fence-backed wipe.
+//! The Guard's crate: the T9 request gate, the service skeleton, and the
+//! secret-handling primitive. Cryptographic operations arrive behind the
+//! CryptoProvider trait in a later, separately reviewed batch.
 
 #![forbid(unsafe_code)]
 
-use std::hint::black_box;
+pub mod context;
+pub mod gen;
+pub mod service;
 
-/// A byte buffer that overwrites its contents on drop.
+use zeroize::Zeroizing;
+
+/// A byte buffer that is wiped when dropped.
 ///
-/// Interim, std-only wipe: fill with zeros and pass the buffer through
-/// [`black_box`] so the compiler cannot prove the writes dead and elide them.
-/// This is best-effort until `zeroize` (volatile writes + compiler fences)
-/// arrives with the first dependency batch — tracked in the v1 cut.
-pub struct SecretBuf(Vec<u8>);
+/// Backed by `zeroize` — volatile writes and compiler fences, the real wipe
+/// the interim `black_box` version approximated before this batch landed.
+pub struct SecretBuf(Zeroizing<Vec<u8>>);
 
 impl SecretBuf {
     pub fn new(bytes: Vec<u8>) -> Self {
-        Self(bytes)
+        Self(Zeroizing::new(bytes))
     }
 
     pub fn expose(&self) -> &[u8] {
@@ -32,13 +31,6 @@ impl SecretBuf {
 
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
-    }
-}
-
-impl Drop for SecretBuf {
-    fn drop(&mut self) {
-        self.0.fill(0);
-        black_box(&self.0);
     }
 }
 
