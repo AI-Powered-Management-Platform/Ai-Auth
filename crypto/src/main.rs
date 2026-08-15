@@ -51,9 +51,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Development key material. The KEK-unwrap path replaces this; a
     // `regulated` deployment must refuse a non-validated provider outright.
     let index_key = KeyHandle::new("blind-index-v1");
-    let provider = SoftwareProvider::new().with_key(index_key.clone(), vec![0x5a; 32]);
+    let kek = KeyHandle::new("kek-v1");
+    let provider = SoftwareProvider::new()
+        .with_key(index_key.clone(), vec![0x5a; 32])
+        .with_key(kek.clone(), vec![0xa5; 32]);
     let attestation = provider.attestation();
-    let guard = Guard::new(Arc::new(provider), index_key);
+    let guard = Guard::new(Arc::new(provider), index_key, kek);
 
     println!(
         "{{\"event\":\"guard_up\",\"addr\":\"{addr}\",\"mtls\":true,\"provider\":\"{}\",\"fips\":{}}}",
