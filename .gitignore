@@ -20,3 +20,8 @@ vendor/
 coverage/
 .DS_Store
 Thumbs.db
+
+# build artifacts
+crypto/target/
+gateway/gateway
+gateway/gateway.exe
