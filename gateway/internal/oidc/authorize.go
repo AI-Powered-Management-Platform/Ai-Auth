@@ -128,6 +128,22 @@ func VerifyPKCE(verifier, storedChallenge string) error {
 	return nil
 }
 
+// RedirectWithCode builds the success redirect. state is echoed back
+// untouched: it is the client's CSRF defence and altering it breaks that.
+func RedirectWithCode(redirectURI, state, code string) (string, error) {
+	u, err := url.Parse(redirectURI)
+	if err != nil {
+		return "", fmt.Errorf("oidc: unparsable redirect: %w", err)
+	}
+	q := u.Query()
+	q.Set("code", code)
+	if state != "" {
+		q.Set("state", state)
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
 // RedirectWithError builds the error redirect for a request that has already
 // passed the redirect check. Callers must never use it for ErrRedirectMismatch
 // or ErrUnknownClient — those are shown to the user, never redirected.
