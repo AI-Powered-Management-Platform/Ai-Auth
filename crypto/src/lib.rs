@@ -9,6 +9,7 @@ pub mod gen;
 pub mod provider;
 pub mod providers;
 pub mod service;
+pub mod webauthn;
 
 use zeroize::Zeroizing;
 
