@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 use crate::context;
+use crate::webauthn;
 use crate::gen::aiauth::crypto::v1::crypto_service_server::CryptoService;
 use crate::provider::{CryptoProvider, KeyHandle, ProviderError};
 use crate::gen::aiauth::crypto::v1::{
@@ -59,27 +60,6 @@ fn audit(op: &str, ctx: Option<&RequestContext>, outcome: &str) {
     );
 }
 
-/// Gate first, audit always, work never (yet).
-fn gate(
-    op: &str,
-    ctx: Option<&RequestContext>,
-    want: Purpose,
-    subject_required: bool,
-) -> Result<(), Status> {
-    match context::validate(ctx, want, subject_required) {
-        Ok(()) => {
-            audit(op, ctx, "accepted_unimplemented");
-            Err(Status::unimplemented(
-                "the operation is gated and audited; the cryptography arrives with the CryptoProvider batch",
-            ))
-        }
-        Err(e) => {
-            audit(op, ctx, "rejected");
-            Err(e)
-        }
-    }
-}
-
 #[tonic::async_trait]
 impl CryptoService for Guard {
     async fn verify_assertion(
@@ -89,8 +69,51 @@ impl CryptoService for Guard {
         let msg = req.into_inner();
         // subject_required=false: with discoverable credentials the subject
         // may be unknown until the assertion itself names it.
-        gate("verify_assertion", msg.context.as_ref(), Purpose::PasskeyLogin, false)?;
-        unreachable!("gate always returns Err in the v1 skeleton");
+        let ctx = msg.context.as_ref();
+        if let Err(e) = context::validate(ctx, Purpose::PasskeyLogin, false) {
+            audit("verify_assertion", ctx, "rejected");
+            return Err(e);
+        }
+
+        let (Some(cred), Some(assertion)) = (msg.credential.as_ref(), msg.assertion.as_ref()) else {
+            audit("verify_assertion", ctx, "rejected");
+            return Err(Status::invalid_argument("credential and assertion are required"));
+        };
+
+        let exp = webauthn::Expectations {
+            rp_id: &msg.rp_id,
+            origin: &msg.expected_origin,
+            challenge: &msg.expected_challenge,
+            stored_sign_count: cred.sign_count,
+        };
+
+        match webauthn::verify(
+            &exp,
+            &cred.cose_public_key,
+            &assertion.authenticator_data,
+            &assertion.client_data_json,
+            &assertion.signature,
+        ) {
+            Ok(v) => {
+                audit("verify_assertion", ctx, "verified");
+                Ok(Response::new(VerifyAssertionResponse {
+                    verdict: crate::gen::aiauth::crypto::v1::verify_assertion_response::Verdict::Verified as i32,
+                    reason: String::new(),
+                    new_sign_count: v.new_sign_count,
+                }))
+            }
+            Err(rejection) => {
+                // A rejection is a normal answer, not an error: the gateway
+                // needs the verdict to apply policy. The reason names the
+                // failed check and never the credential or the user.
+                audit("verify_assertion", ctx, rejection.code());
+                Ok(Response::new(VerifyAssertionResponse {
+                    verdict: crate::gen::aiauth::crypto::v1::verify_assertion_response::Verdict::Rejected as i32,
+                    reason: rejection.code().to_string(),
+                    new_sign_count: cred.sign_count,
+                }))
+            }
+        }
     }
 
     async fn encrypt_field(
@@ -190,6 +213,8 @@ impl CryptoService for Guard {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gen::aiauth::crypto::v1::verify_assertion_response::Verdict;
+    use crate::gen::aiauth::crypto::v1::{Assertion, StoredCredential};
     use crate::providers::software::SoftwareProvider;
     use tonic::Code;
 
@@ -229,15 +254,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn verify_assertion_is_still_unimplemented() {
-        // Proves ordering on the one operation whose cryptography is absent:
-        // the gate passed, and only then did the handler say so.
+    async fn a_malformed_assertion_is_a_rejected_verdict_not_an_error() {
+        // The gateway must always get a verdict it can apply policy to.
+        let req = VerifyAssertionRequest {
+            context: ctx(Purpose::PasskeyLogin),
+            rp_id: "auth.example.com".into(),
+            expected_origin: "https://auth.example.com".into(),
+            expected_challenge: vec![1u8; 32],
+            credential: Some(StoredCredential { cose_public_key: vec![4u8; 65], sign_count: 0 }),
+            assertion: Some(Assertion {
+                authenticator_data: vec![0u8; 37],
+                client_data_json: b"not json".to_vec(),
+                signature: vec![0u8; 64],
+            }),
+        };
+        let resp = guard().verify_assertion(Request::new(req)).await.unwrap().into_inner();
+        assert_eq!(resp.verdict, Verdict::Rejected as i32);
+        assert_eq!(resp.reason, "malformed_client_data");
+    }
+
+    #[tokio::test]
+    async fn a_missing_assertion_is_an_error() {
         let req = VerifyAssertionRequest {
             context: ctx(Purpose::PasskeyLogin),
             ..Default::default()
         };
         let err = guard().verify_assertion(Request::new(req)).await.unwrap_err();
-        assert_eq!(err.code(), Code::Unimplemented);
+        assert_eq!(err.code(), Code::InvalidArgument);
     }
 
     #[tokio::test]
