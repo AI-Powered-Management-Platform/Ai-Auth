@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/login"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/oidc"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/tokens"
 )
@@ -30,6 +31,9 @@ type Config struct {
 	SigningKeys map[string]*ecdsa.PublicKey
 	Clients     func(string) (oidc.Client, bool)
 	LoginURL    string
+	// Login runs the passkey ceremony. Absent means the OIDC endpoints
+	// exist but nobody can complete a login through them.
+	Login *login.Ceremony
 }
 
 // New returns the gateway mux.
@@ -79,6 +83,15 @@ func New(cfg Config) http.Handler {
 		})
 		jwks := oidc.NewJWKS(cfg.SigningKeys)
 		mux.Handle("GET /.well-known/jwks.json", &jwks)
+
+		if cfg.Login != nil {
+			// The ceremony must share the stores the endpoints use, or a
+			// code issued at login would be unknown at /token.
+			cfg.Login.Pending = pending
+			cfg.Login.Codes = codes
+			mux.HandleFunc("GET /login/begin", cfg.Login.Begin)
+			mux.HandleFunc("POST /login/finish", cfg.Login.Finish)
+		}
 	}
 
 	return securityHeaders(mux)
