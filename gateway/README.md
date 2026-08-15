@@ -13,7 +13,7 @@ read none of the data it stores.
 | Public | ✅ The only one |
 | Networks | `edge`, `net-a` → crypto, `net-b` → ai |
 | Container | distroless · non-root · read-only rootfs · all capabilities dropped · egress to tunnel only |
-| Status | 📋 Planned — documentation only, no code yet |
+| Status | 🚧 v1 building — health endpoints, timeouts, graceful shutdown; no auth surface yet |
 
 ## Job
 

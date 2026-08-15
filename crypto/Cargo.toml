@@ -1,0 +1,10 @@
+[package]
+name = "aiauth-crypto"
+version = "0.1.0"
+edition = "2021"
+
+# The crypto crate ships with overflow checks in release builds — integer
+# overflow wraps silently otherwise, and this is the one crate where that
+# must never happen (README, "Two Rust traps").
+[profile.release]
+overflow-checks = true

@@ -13,7 +13,7 @@ already validated.
 | Public | ❌ Never |
 | Networks | `net-a` only — no route to `ai` exists |
 | Container | scratch · non-root · read-only rootfs · all capabilities dropped · egress to KMS only |
-| Status | 📋 Planned — documentation only, no code yet |
+| Status | 🚧 v1 building — `SecretBuf` zero-on-drop primitive, zero dependencies; no serving surface yet |
 
 ## Where key material actually lives
 

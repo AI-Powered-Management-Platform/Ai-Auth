@@ -1,0 +1,111 @@
+// The Guard's wire contract — every key operation the system is allowed to
+// ask for, and nothing else.
+//
+// T9 (gateway confused deputy) is answered here, in the contract itself:
+// every request carries a RequestContext naming tenant, subject, and purpose.
+// The Guard MUST reject PURPOSE_UNSPECIFIED, MUST enforce that a wrapped DEK
+// only opens against its own tenant (the tenant id is AEAD associated data —
+// cryptographic binding, not a lookup; T10), MUST rate-limit unwrap and sign
+// per caller, and MUST audit every operation individually. A valid mTLS
+// certificate is transport identity, not authorisation.
+
+syntax = "proto3";
+
+package aiauth.crypto.v1;
+
+service CryptoService {
+  // WebAuthn assertion verification. Stateless: the caller supplies the
+  // stored credential; the Guard supplies only judgement.
+  rpc VerifyAssertion(VerifyAssertionRequest) returns (VerifyAssertionResponse);
+
+  // Envelope encryption of a single field. The DEK never leaves the Guard:
+  // absent wrapped_dek means "generate one and return it wrapped".
+  rpc EncryptField(EncryptFieldRequest) returns (EncryptFieldResponse);
+  rpc DecryptField(DecryptFieldRequest) returns (DecryptFieldResponse);
+
+  // Salted HMAC for equality search without plaintext.
+  rpc BlindIndex(BlindIndexRequest) returns (BlindIndexResponse);
+}
+
+// Why every request must say what it is for — T9. The Guard refuses requests
+// whose purpose does not match the operation (a DecryptField call claiming
+// PURPOSE_PASSKEY_LOGIN is an error, and an audit event).
+enum Purpose {
+  PURPOSE_UNSPECIFIED = 0;  // always rejected
+  PURPOSE_PASSKEY_LOGIN = 1;
+  PURPOSE_ROW_ENCRYPT = 2;
+  PURPOSE_ROW_DECRYPT = 3;
+  PURPOSE_BLIND_INDEX = 4;
+}
+
+message RequestContext {
+  string tenant_id = 1;   // T10: also bound into AEAD associated data
+  string subject_id = 2;  // whose data — audited, never blank for row ops
+  Purpose purpose = 3;
+  string request_id = 4;  // correlates the per-operation audit record
+}
+
+message StoredCredential {
+  bytes cose_public_key = 1;  // as registered, COSE format
+  uint32 sign_count = 2;      // last seen; cloned-authenticator detection
+}
+
+message Assertion {
+  bytes authenticator_data = 1;
+  bytes client_data_json = 2;
+  bytes signature = 3;
+}
+
+message VerifyAssertionRequest {
+  RequestContext context = 1;
+  string rp_id = 2;
+  string expected_origin = 3;
+  bytes expected_challenge = 4;
+  StoredCredential credential = 5;
+  Assertion assertion = 6;
+}
+
+message VerifyAssertionResponse {
+  Verdict verdict = 1;
+  // Machine-readable rejection cause, e.g. "origin_mismatch", "bad_signature",
+  // "sign_count_regression". Never carries user data.
+  string reason = 2;
+  uint32 new_sign_count = 3;
+
+  enum Verdict {
+    VERDICT_UNSPECIFIED = 0;
+    VERDICT_VERIFIED = 1;
+    VERDICT_REJECTED = 2;
+  }
+}
+
+message EncryptFieldRequest {
+  RequestContext context = 1;
+  bytes plaintext = 2;
+  // Empty on first write: the Guard generates a DEK and returns it wrapped.
+  bytes wrapped_dek = 3;
+}
+
+message EncryptFieldResponse {
+  bytes ciphertext = 1;
+  bytes wrapped_dek = 2;
+}
+
+message DecryptFieldRequest {
+  RequestContext context = 1;
+  bytes ciphertext = 2;
+  bytes wrapped_dek = 3;
+}
+
+message DecryptFieldResponse {
+  bytes plaintext = 1;
+}
+
+message BlindIndexRequest {
+  RequestContext context = 1;
+  bytes input = 2;
+}
+
+message BlindIndexResponse {
+  bytes index = 1;  // 32 bytes, HMAC output
+}

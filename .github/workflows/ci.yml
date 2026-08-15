@@ -33,3 +33,27 @@ jobs:
           else
             echo "base branch has no proto files yet — skipping breaking check"
           fi
+
+  gateway:
+    name: gateway (go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: vet, build, test
+        working-directory: gateway
+        run: |
+          go vet ./...
+          go build ./...
+          go test -race ./...
+
+  crypto:
+    name: crypto (rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: clippy + test
+        working-directory: crypto
+        run: |
+          rustup component add clippy 2>/dev/null || true
+          cargo clippy --locked -- -D warnings
+          cargo test --locked
