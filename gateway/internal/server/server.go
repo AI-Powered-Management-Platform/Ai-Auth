@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/dpop"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/login"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/oidc"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/tokens"
@@ -34,6 +35,9 @@ type Config struct {
 	// Login runs the passkey ceremony. Absent means the OIDC endpoints
 	// exist but nobody can complete a login through them.
 	Login *login.Ceremony
+	// DPoP, when set, makes the token endpoint require a proof and bind
+	// every issued token to the proving key.
+	DPoP *dpop.Verifier
 }
 
 // New returns the gateway mux.
@@ -77,6 +81,7 @@ func New(cfg Config) http.Handler {
 		})
 		mux.Handle("POST /token", &oidc.Token{
 			Codes: codes, Signer: cfg.Signer, Audience: cfg.Audience,
+			DPoP: cfg.DPoP, Issuer: cfg.Issuer,
 		})
 		mux.Handle("GET /.well-known/openid-configuration", &oidc.Discovery{
 			Meta: oidc.NewMetadata(cfg.Issuer),
