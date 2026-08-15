@@ -1,8 +1,8 @@
-//! The Guard's service implementation. v1 posture: enforce the T9 gate and
-//! audit every operation — then refuse, because the actual cryptography
-//! arrives with the CryptoProvider batch. Enforcement exists before function
-//! on purpose: no code path will ever exist where the work happens without
-//! the gate in front of it.
+//! The Guard's service implementation. Every handler follows the same order,
+//! and the order is the security property: validate purpose (T9), check the
+//! rate budget (T9), then do the work. Enforcement was written before
+//! function, so no code path exists where the work happens without both
+//! checks in front of it.
 
 use std::sync::Arc;
 
@@ -25,11 +25,33 @@ pub struct Guard {
     index_key: KeyHandle,
     /// Key encryption key: wraps and unwraps per-row DEKs.
     kek: KeyHandle,
+    limiter: crate::limits::RateLimiter,
 }
 
 impl Guard {
     pub fn new(provider: Arc<dyn CryptoProvider>, index_key: KeyHandle, kek: KeyHandle) -> Self {
-        Self { provider, index_key, kek }
+        Self {
+            provider,
+            index_key,
+            kek,
+            limiter: crate::limits::default_limiter(),
+        }
+    }
+
+    /// Rate check, run after the purpose gate and before any cryptography.
+    /// A refusal is audited: a caller hitting its ceiling is exactly the
+    /// signal an operator wants to see.
+    fn within_limits(
+        &self,
+        op: &'static str,
+        ctx: Option<&RequestContext>,
+        tenant: &str,
+    ) -> Result<(), Status> {
+        if self.limiter.allow(tenant, op) {
+            return Ok(());
+        }
+        audit(op, ctx, "rate_limited");
+        Err(Status::resource_exhausted("operation budget exceeded"))
     }
 
     /// One shape for every cryptographic failure the caller sees. A decrypt
@@ -74,6 +96,8 @@ impl CryptoService for Guard {
             audit("verify_assertion", ctx, "rejected");
             return Err(e);
         }
+
+        self.within_limits("verify_assertion", ctx, &ctx.expect("validated").tenant_id)?;
 
         let (Some(cred), Some(assertion)) = (msg.credential.as_ref(), msg.assertion.as_ref()) else {
             audit("verify_assertion", ctx, "rejected");
@@ -127,6 +151,7 @@ impl CryptoService for Guard {
             return Err(e);
         }
         let tenant = &ctx.expect("validated").tenant_id;
+        self.within_limits("encrypt_field", ctx, tenant)?;
 
         // Empty wrapped_dek means first write: mint a DEK for this row.
         let wrapped = if msg.wrapped_dek.is_empty() {
@@ -164,6 +189,7 @@ impl CryptoService for Guard {
             return Err(e);
         }
         let tenant = &ctx.expect("validated").tenant_id;
+        self.within_limits("decrypt_field", ctx, tenant)?;
 
         match self
             .provider
@@ -193,6 +219,7 @@ impl CryptoService for Guard {
 
         // Safe: validate() rejects a missing context before this point.
         let tenant = &ctx.expect("validated").tenant_id;
+        self.within_limits("blind_index", ctx, tenant)?;
 
         match self.provider.blind_index(&self.index_key, tenant, &msg.input) {
             Ok(index) => {
@@ -271,6 +298,28 @@ mod tests {
         let resp = guard().verify_assertion(Request::new(req)).await.unwrap().into_inner();
         assert_eq!(resp.verdict, Verdict::Rejected as i32);
         assert_eq!(resp.reason, "malformed_client_data");
+    }
+
+    #[tokio::test]
+    async fn a_flood_of_decrypts_trips_the_budget() {
+        // The T9 case at the service boundary: a caller with a valid
+        // credential and a correct purpose still cannot drain the store.
+        let g = guard();
+        let mut refused = false;
+        for _ in 0..10_000 {
+            let req = DecryptFieldRequest {
+                context: ctx(Purpose::RowDecrypt),
+                ciphertext: vec![0u8; 32],
+                wrapped_dek: vec![0u8; 32],
+            };
+            if let Err(e) = g.decrypt_field(Request::new(req)).await {
+                if e.code() == Code::ResourceExhausted {
+                    refused = true;
+                    break;
+                }
+            }
+        }
+        assert!(refused, "a sustained decrypt flood must trip the rate budget");
     }
 
     #[tokio::test]
