@@ -1,0 +1,17 @@
+# Code generation. Generated code is COMMITTED and CI regenerates + diffs, so
+# drift between contract and code is a red build, not a runtime surprise.
+# Rust (tonic/prost) plugins arrive with the crypto dependency batch — a
+# reviewed Tier-1 change per docs/development-lifecycle.md §3.
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/gen
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.36.12
+    out: gateway/gen
+    opt: paths=source_relative
+  - remote: buf.build/grpc/go:v1.6.2
+    out: gateway/gen
+    opt: paths=source_relative
