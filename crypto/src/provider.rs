@@ -52,6 +52,9 @@ pub struct ProviderAttestation {
 pub enum ProviderError {
     UnknownKey(KeyHandle),
     Backend(String),
+    /// Authentication failed: wrong key, wrong tenant, or tampered bytes.
+    /// Deliberately undifferentiated — telling the caller *which* is an oracle.
+    Decrypt,
 }
 
 impl fmt::Display for ProviderError {
@@ -59,6 +62,7 @@ impl fmt::Display for ProviderError {
         match self {
             Self::UnknownKey(h) => write!(f, "unknown key handle {h:?}"),
             Self::Backend(msg) => write!(f, "crypto backend error: {msg}"),
+            Self::Decrypt => write!(f, "decryption failed"),
         }
     }
 }
@@ -68,7 +72,40 @@ impl std::error::Error for ProviderError {}
 /// The primitives the Guard is allowed to ask for. Grows one reviewed method
 /// at a time; today it carries the operation that needs no key ceremony to be
 /// useful and no secret to be returned.
+/// A data encryption key, wrapped by the KEK. Opaque ciphertext: the gateway
+/// stores and ferries these, and can never open one.
+pub type WrappedDek = Vec<u8>;
+
 pub trait CryptoProvider: Send + Sync {
+    /// Generates a fresh DEK and returns it wrapped under the KEK. Per-row
+    /// DEKs are what make cryptographic shredding cheap: destroy one key and
+    /// that subject's ciphertext dies everywhere, backups included
+    /// (docs/key-custody.md §7).
+    fn generate_wrapped_dek(
+        &self,
+        kek: &KeyHandle,
+        tenant_id: &str,
+    ) -> Result<WrappedDek, ProviderError>;
+
+    /// Encrypts one field. `tenant_id` is authenticated associated data on
+    /// both the wrap and the payload, so a DEK cannot open ciphertext from
+    /// another tenant — the binding is cryptographic, not a lookup (T10).
+    fn encrypt_field(
+        &self,
+        kek: &KeyHandle,
+        tenant_id: &str,
+        wrapped_dek: &[u8],
+        plaintext: &[u8],
+    ) -> Result<Vec<u8>, ProviderError>;
+
+    fn decrypt_field(
+        &self,
+        kek: &KeyHandle,
+        tenant_id: &str,
+        wrapped_dek: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<Vec<u8>, ProviderError>;
+
     /// Deterministic, tenant-bound index for equality search over encrypted
     /// data. `tenant_id` is mixed into the derivation, so identical plaintext
     /// in two tenants yields different indexes — cross-tenant correlation is

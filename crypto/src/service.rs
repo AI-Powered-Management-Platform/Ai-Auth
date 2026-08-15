@@ -10,7 +10,7 @@ use tonic::{Request, Response, Status};
 
 use crate::context;
 use crate::gen::aiauth::crypto::v1::crypto_service_server::CryptoService;
-use crate::provider::{CryptoProvider, KeyHandle};
+use crate::provider::{CryptoProvider, KeyHandle, ProviderError};
 use crate::gen::aiauth::crypto::v1::{
     BlindIndexRequest, BlindIndexResponse, DecryptFieldRequest, DecryptFieldResponse,
     EncryptFieldRequest, EncryptFieldResponse, Purpose, RequestContext, VerifyAssertionRequest,
@@ -22,11 +22,27 @@ pub struct Guard {
     /// The blind-index key. One handle for now; per-tenant derivation and
     /// rotation arrive with the KEK path (docs/key-custody.md §4, §6).
     index_key: KeyHandle,
+    /// Key encryption key: wraps and unwraps per-row DEKs.
+    kek: KeyHandle,
 }
 
 impl Guard {
-    pub fn new(provider: Arc<dyn CryptoProvider>, index_key: KeyHandle) -> Self {
-        Self { provider, index_key }
+    pub fn new(provider: Arc<dyn CryptoProvider>, index_key: KeyHandle, kek: KeyHandle) -> Self {
+        Self { provider, index_key, kek }
+    }
+
+    /// One shape for every cryptographic failure the caller sees. A decrypt
+    /// failure is `permission_denied` — the caller asked for something it may
+    /// not have (wrong tenant, wrong key) — and never says which.
+    fn fail(&self, op: &str, ctx: Option<&RequestContext>, e: &ProviderError) -> Status {
+        audit(op, ctx, "denied");
+        match e {
+            ProviderError::Decrypt => Status::permission_denied("not available for this context"),
+            other => {
+                eprintln!("{{\"error\":\"{op}\",\"detail\":\"{other}\"}}");
+                Status::internal("operation unavailable")
+            }
+        }
     }
 }
 
@@ -82,8 +98,36 @@ impl CryptoService for Guard {
         req: Request<EncryptFieldRequest>,
     ) -> Result<Response<EncryptFieldResponse>, Status> {
         let msg = req.into_inner();
-        gate("encrypt_field", msg.context.as_ref(), Purpose::RowEncrypt, true)?;
-        unreachable!("gate always returns Err in the v1 skeleton");
+        let ctx = msg.context.as_ref();
+        if let Err(e) = context::validate(ctx, Purpose::RowEncrypt, true) {
+            audit("encrypt_field", ctx, "rejected");
+            return Err(e);
+        }
+        let tenant = &ctx.expect("validated").tenant_id;
+
+        // Empty wrapped_dek means first write: mint a DEK for this row.
+        let wrapped = if msg.wrapped_dek.is_empty() {
+            match self.provider.generate_wrapped_dek(&self.kek, tenant) {
+                Ok(w) => w,
+                Err(e) => return Err(self.fail("encrypt_field", ctx, &e)),
+            }
+        } else {
+            msg.wrapped_dek
+        };
+
+        match self
+            .provider
+            .encrypt_field(&self.kek, tenant, &wrapped, &msg.plaintext)
+        {
+            Ok(ciphertext) => {
+                audit("encrypt_field", ctx, "ok");
+                Ok(Response::new(EncryptFieldResponse {
+                    ciphertext,
+                    wrapped_dek: wrapped,
+                }))
+            }
+            Err(e) => Err(self.fail("encrypt_field", ctx, &e)),
+        }
     }
 
     async fn decrypt_field(
@@ -91,8 +135,23 @@ impl CryptoService for Guard {
         req: Request<DecryptFieldRequest>,
     ) -> Result<Response<DecryptFieldResponse>, Status> {
         let msg = req.into_inner();
-        gate("decrypt_field", msg.context.as_ref(), Purpose::RowDecrypt, true)?;
-        unreachable!("gate always returns Err in the v1 skeleton");
+        let ctx = msg.context.as_ref();
+        if let Err(e) = context::validate(ctx, Purpose::RowDecrypt, true) {
+            audit("decrypt_field", ctx, "rejected");
+            return Err(e);
+        }
+        let tenant = &ctx.expect("validated").tenant_id;
+
+        match self
+            .provider
+            .decrypt_field(&self.kek, tenant, &msg.wrapped_dek, &msg.ciphertext)
+        {
+            Ok(plaintext) => {
+                audit("decrypt_field", ctx, "ok");
+                Ok(Response::new(DecryptFieldResponse { plaintext }))
+            }
+            Err(e) => Err(self.fail("decrypt_field", ctx, &e)),
+        }
     }
 
     async fn blind_index(
@@ -135,8 +194,10 @@ mod tests {
     use tonic::Code;
 
     fn guard() -> Guard {
-        let p = SoftwareProvider::new().with_key(KeyHandle::new("idx-1"), vec![9u8; 32]);
-        Guard::new(Arc::new(p), KeyHandle::new("idx-1"))
+        let p = SoftwareProvider::new()
+            .with_key(KeyHandle::new("idx-1"), vec![9u8; 32])
+            .with_key(KeyHandle::new("kek-1"), vec![3u8; 32]);
+        Guard::new(Arc::new(p), KeyHandle::new("idx-1"), KeyHandle::new("kek-1"))
     }
 
     fn ctx(purpose: Purpose) -> Option<RequestContext> {
@@ -168,16 +229,67 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn correct_purpose_reaches_unimplemented() {
-        // Proves ordering on an operation whose cryptography is still absent:
-        // the gate passed, and only then did the handler report that the work
-        // itself does not exist yet.
-        let req = DecryptFieldRequest {
-            context: ctx(Purpose::RowDecrypt),
+    async fn verify_assertion_is_still_unimplemented() {
+        // Proves ordering on the one operation whose cryptography is absent:
+        // the gate passed, and only then did the handler say so.
+        let req = VerifyAssertionRequest {
+            context: ctx(Purpose::PasskeyLogin),
             ..Default::default()
         };
-        let err = guard().decrypt_field(Request::new(req)).await.unwrap_err();
+        let err = guard().verify_assertion(Request::new(req)).await.unwrap_err();
         assert_eq!(err.code(), Code::Unimplemented);
+    }
+
+    #[tokio::test]
+    async fn envelope_round_trip_over_the_service() {
+        let g = guard();
+        let enc = g
+            .encrypt_field(Request::new(EncryptFieldRequest {
+                context: ctx(Purpose::RowEncrypt),
+                plaintext: b"alice@example.com".to_vec(),
+                wrapped_dek: Vec::new(),
+            }))
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(!enc.wrapped_dek.is_empty(), "first write must mint a DEK");
+
+        let dec = g
+            .decrypt_field(Request::new(DecryptFieldRequest {
+                context: ctx(Purpose::RowDecrypt),
+                ciphertext: enc.ciphertext,
+                wrapped_dek: enc.wrapped_dek,
+            }))
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!(dec.plaintext, b"alice@example.com");
+    }
+
+    #[tokio::test]
+    async fn another_tenant_cannot_decrypt_the_row() {
+        let g = guard();
+        let enc = g
+            .encrypt_field(Request::new(EncryptFieldRequest {
+                context: ctx(Purpose::RowEncrypt),
+                plaintext: b"payload".to_vec(),
+                wrapped_dek: Vec::new(),
+            }))
+            .await
+            .unwrap()
+            .into_inner();
+
+        let mut other = ctx(Purpose::RowDecrypt).unwrap();
+        other.tenant_id = "tenant-b".into();
+        let err = g
+            .decrypt_field(Request::new(DecryptFieldRequest {
+                context: Some(other),
+                ciphertext: enc.ciphertext,
+                wrapped_dek: enc.wrapped_dek,
+            }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), Code::PermissionDenied);
     }
 
     #[tokio::test]
