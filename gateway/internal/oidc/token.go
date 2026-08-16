@@ -17,7 +17,7 @@ const AccessTokenTTL = 10 * time.Minute
 
 // Token serves the token endpoint.
 type Token struct {
-	Codes    *CodeStore
+	Codes    Codes
 	Signer   *tokens.Signer
 	Audience string
 	// DPoP verifies the proof a client sends with its exchange. Absent means

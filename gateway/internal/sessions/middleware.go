@@ -11,6 +11,14 @@ import (
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/tokens"
 )
 
+// RevocationChecker is the question the middleware asks on every request.
+// An interface so the answer can come from memory in development and from
+// Postgres in production, and so an implementation is free to fail closed
+// without the middleware needing to know it did.
+type RevocationChecker interface {
+	IsRevoked(jti, tenantID, subjectID string, issuedAt time.Time) bool
+}
+
 type contextKey struct{}
 
 // FromContext returns the verified claims a handler may rely on. Its
@@ -24,7 +32,7 @@ func FromContext(ctx context.Context) (*tokens.Claims, bool) {
 type Authenticator struct {
 	Tokens      *tokens.Verifier
 	DPoP        *dpop.Verifier
-	Revocations *Revocations
+	Revocations RevocationChecker
 	Audience    string
 	// BaseURL is this server's own address, used to rebuild the URI a proof
 	// must be bound to. Taken from configuration, never from the request:

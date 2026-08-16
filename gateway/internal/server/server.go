@@ -13,6 +13,7 @@ import (
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/dpop"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/login"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/oidc"
+	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/sessions"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/tokens"
 )
 
@@ -35,6 +36,11 @@ type Config struct {
 	// Login runs the passkey ceremony. Absent means the OIDC endpoints
 	// exist but nobody can complete a login through them.
 	Login *login.Ceremony
+	// Codes and Revocations select the storage backend. Absent means the
+	// in-memory implementations, which are correct for one process and
+	// wrong for two — production supplies the Postgres-backed versions.
+	Codes       oidc.Codes
+	Revocations sessions.RevocationChecker
 	// DPoP, when set, makes the token endpoint require a proof and bind
 	// every issued token to the proving key.
 	DPoP *dpop.Verifier
@@ -73,7 +79,10 @@ func New(cfg Config) http.Handler {
 	})
 
 	if cfg.Signer != nil && cfg.Clients != nil {
-		codes := oidc.NewCodeStore()
+		codes := cfg.Codes
+		if codes == nil {
+			codes = oidc.NewCodeStore()
+		}
 		pending := oidc.NewPendingStore()
 
 		mux.Handle("GET /authorize", &oidc.Authorize{

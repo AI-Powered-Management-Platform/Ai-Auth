@@ -36,6 +36,15 @@ type Grant struct {
 	expiresAt time.Time
 }
 
+// Codes is what the endpoints need from an authorization code store. An
+// interface so the in-memory and Postgres implementations are
+// interchangeable: development runs on one process, production runs on
+// several, and the handlers should not know which.
+type Codes interface {
+	Issue(g Grant) (string, error)
+	Redeem(code, clientID, redirectURI string) (*Grant, error)
+}
+
 // CodeStore issues and redeems authorization codes exactly once.
 //
 // In-memory for v1, which means codes do not survive a restart and do not
