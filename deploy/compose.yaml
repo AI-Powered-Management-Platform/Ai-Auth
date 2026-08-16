@@ -18,12 +18,17 @@ services:
       GUARD_SERVER_NAME: crypto
       OIDC_ISSUER: "http://127.0.0.1:8080"
       OIDC_AUDIENCE: "api"
+      DATABASE_URL: "postgres://aiauth:dev-only-not-a-secret@postgres:5432/aiauth"
     volumes:
       - ./dev-certs:/certs:ro
     ports:
       - "127.0.0.1:8080:8080"   # dev only; production enters via the ingress adapter
     networks: [edge, net-a, net-b, net-data]
-    depends_on: [crypto]
+    depends_on:
+      crypto:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
   crypto:
     build: ../crypto

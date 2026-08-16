@@ -17,6 +17,7 @@ import (
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/guard"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/oidc"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/server"
+	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/store"
 	"github.com/AI-Powered-Management-Platform/Ai-Auth/gateway/internal/tokens"
 )
 
@@ -57,10 +58,33 @@ func main() {
 		check = g.Probe
 	}
 
+	// Storage selection. With DATABASE_URL set, state lives in Postgres and
+	// survives restarts and spans replicas; without it, the in-memory stores
+	// run — correct for one process, and explicitly not for production.
+	cfgStores := server.Config{}
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		pool, err := store.Open(context.Background(), dsn)
+		if err != nil {
+			// A gateway that cannot reach its database must not start
+			// pretending to work; the first login would fail anyway.
+			log.Error("database", "err", err)
+			os.Exit(1)
+		}
+		defer pool.Close()
+		cfgStores.Codes = store.NewCodeAdapter(store.NewCodes(pool))
+		revs := store.NewRevocationAdapter(store.NewRevocations(pool))
+		revs.OnError = func(err error) { log.Error("revocation lookup", "err", err) }
+		cfgStores.Revocations = revs
+		log.Info("storage: postgres")
+	} else {
+		log.Warn("storage: in-memory — state is lost on restart and not shared between replicas")
+	}
+
 	// OIDC wiring: a signer is required for the endpoints to exist at all.
 	// v1 generates a development key at boot; production keys come from the
 	// KMS/HSM path (docs/key-custody.md §4) and never live in this process.
-	cfg := server.Config{Version: version, Guard: check, LoginURL: "/login"}
+	cfg := cfgStores
+	cfg.Version, cfg.Guard, cfg.LoginURL = version, check, "/login"
 	if issuer := os.Getenv("OIDC_ISSUER"); issuer != "" {
 		key, err := tokens.GenerateKey()
 		if err != nil {

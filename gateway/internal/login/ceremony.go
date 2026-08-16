@@ -27,7 +27,7 @@ type Ceremony struct {
 	Challenges  *Challenges
 	Credentials *Credentials
 	Pending     *oidc.PendingStore
-	Codes       *oidc.CodeStore
+	Codes       oidc.Codes
 	RPID        string
 	Origin      string
 	Log         *slog.Logger
