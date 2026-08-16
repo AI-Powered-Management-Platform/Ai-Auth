@@ -75,3 +75,33 @@ jobs:
         run: shellcheck scripts/*.sh
       - name: database isolation controls hold
         run: ./scripts/test-db-isolation.sh
+
+  database:
+    name: store (postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: aiauth
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: aiauth
+        options: >-
+          --health-cmd "pg_isready -U aiauth -d aiauth"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+        ports: ["5432:5432"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: apply migrations
+        env:
+          PGPASSWORD: test
+        run: |
+          for f in deploy/migrations/*.sql; do
+            echo "applying $f"
+            psql -h localhost -U aiauth -d aiauth -v ON_ERROR_STOP=1 -f "$f"
+          done
+      - name: store integration tests
+        working-directory: gateway
+        env:
+          TEST_DATABASE_URL: postgres://aiauth:test@localhost:5432/aiauth
+        run: go test -race ./internal/store/
